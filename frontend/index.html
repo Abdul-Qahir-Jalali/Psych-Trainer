@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="PsychTrainer — AI Clinical Simulation Platform for Medical Training"
+    />
+    <title>PsychTrainer — Clinical Simulation</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <!-- ═══════════════════════════════════════════════════ -->
+    <!--  HEADER                                            -->
+    <!-- ═══════════════════════════════════════════════════ -->
+    <header id="app-header">
+      <div class="header-left">
+        <div class="logo-icon">🧠</div>
+        <div>
+          <h1>PsychTrainer</h1>
+          <p class="subtitle">Clinical Simulation Platform</p>
+        </div>
+      </div>
+      <div class="header-right">
+        <div class="phase-badge" id="phase-badge">
+          <span class="phase-dot"></span>
+          <span id="phase-label">OFFLINE</span>
+        </div>
+        <div class="turn-counter" id="turn-counter">Turn 0</div>
+      </div>
+    </header>
+
+    <!-- ═══════════════════════════════════════════════════ -->
+    <!--  MAIN LAYOUT                                       -->
+    <!-- ═══════════════════════════════════════════════════ -->
+    <main id="app-main">
+      <!-- LEFT: Chat Panel -->
+      <section class="chat-panel" id="chat-panel">
+        <!-- Welcome Screen (shown before session starts) -->
+        <div class="welcome-screen" id="welcome-screen">
+          <div class="welcome-content">
+            <div class="welcome-icon">🩺</div>
+            <h2>Clinical Interview Simulation</h2>
+            <p>
+              You are about to interview <strong>James</strong>, a 21-year-old
+              university student visiting the psychiatric outpatient clinic for
+              the first time.
+            </p>
+            <div class="scenario-card">
+              <div class="scenario-header">📋 Scenario Briefing</div>
+              <ul>
+                <li>Patient was brought by his girlfriend</li>
+                <li>First psychiatric visit — likely reluctant</li>
+                <li>
+                  Your goal: build rapport, take history, assess risk, form
+                  diagnosis
+                </li>
+                <li>You will be graded on 7 clinical criteria</li>
+              </ul>
+            </div>
+            <button class="btn-primary" id="btn-start" onclick="startSession()">
+              <span class="btn-icon">▶</span>
+              Begin Session
+            </button>
+          </div>
+        </div>
+
+        <!-- Chat Messages -->
+        <div class="chat-messages" id="chat-messages" style="display: none">
+          <!-- Messages will be injected here -->
+        </div>
+
+        <!-- Typing Indicator -->
+        <div
+          class="typing-indicator"
+          id="typing-indicator"
+          style="display: none"
+        >
+          <div class="typing-avatar">🧑</div>
+          <div class="typing-dots"><span></span><span></span><span></span></div>
+          <span class="typing-label">James is thinking...</span>
+        </div>
+
+        <!-- Input Bar -->
+        <div class="input-bar" id="input-bar" style="display: none">
+          <div class="input-wrapper">
+            <textarea
+              id="message-input"
+              placeholder="Type your question to the patient..."
+              rows="1"
+              onkeydown="handleKeyDown(event)"
+            ></textarea>
+            <button class="btn-send" id="btn-send" onclick="sendMessage()">
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" />
+              </svg>
+            </button>
+          </div>
+          <button class="btn-end" id="btn-end" onclick="endSession()">
+            End Session & Get Grade
+          </button>
+        </div>
+      </section>
+
+      <!-- RIGHT: Evaluation Panel -->
+      <aside class="eval-panel" id="eval-panel">
+        <div class="eval-header">
+          <h3>📊 Live Evaluation</h3>
+          <p class="eval-subtitle">Professor's silent observations</p>
+        </div>
+
+        <div class="eval-notes" id="eval-notes">
+          <div class="eval-placeholder">
+            <div class="eval-placeholder-icon">👁️</div>
+            <p>
+              Dr. Williams is watching silently.<br />Notes will appear as you
+              interact.
+            </p>
+          </div>
+        </div>
+
+        <!-- Grade Report (shown after session ends) -->
+        <div class="grade-report" id="grade-report" style="display: none">
+          <div class="grade-header">
+            <h3>📝 Final Grade Report</h3>
+            <div class="grade-circle" id="grade-circle">
+              <span class="grade-letter" id="grade-letter">—</span>
+              <span class="grade-score" id="grade-score">0</span>
+            </div>
+          </div>
+          <p class="grade-summary" id="grade-summary"></p>
+
+          <div class="criteria-list" id="criteria-list"></div>
+
+          <div class="grade-section" id="strengths-section">
+            <h4>💪 Strengths</h4>
+            <ul id="strengths-list"></ul>
+          </div>
+
+          <div class="grade-section" id="improvements-section">
+            <h4>📈 Areas for Improvement</h4>
+            <ul id="improvements-list"></ul>
+          </div>
+        </div>
+      </aside>
+    </main>
+
+    <script src="app.js"></script>
+  </body>
+</html>

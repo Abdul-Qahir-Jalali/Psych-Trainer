@@ -1,0 +1,366 @@
+/**
+ * PsychTrainer — Frontend Application Logic
+ *
+ * Handles session management, REST API communication,
+ * message rendering, and grade report visualization.
+ */
+
+// ═══════════════════════════════════════════════════════
+//  State
+// ═══════════════════════════════════════════════════════
+
+let sessionId = null;
+let isWaitingForResponse = false;
+
+// ═══════════════════════════════════════════════════════
+//  DOM References
+// ═══════════════════════════════════════════════════════
+
+const welcomeScreen   = document.getElementById('welcome-screen');
+const chatMessages    = document.getElementById('chat-messages');
+const inputBar        = document.getElementById('input-bar');
+const messageInput    = document.getElementById('message-input');
+const btnSend         = document.getElementById('btn-send');
+const btnStart        = document.getElementById('btn-start');
+const btnEnd          = document.getElementById('btn-end');
+const typingIndicator = document.getElementById('typing-indicator');
+const phaseBadge      = document.getElementById('phase-badge');
+const phaseLabel      = document.getElementById('phase-label');
+const turnCounter     = document.getElementById('turn-counter');
+const evalNotes       = document.getElementById('eval-notes');
+const gradeReport     = document.getElementById('grade-report');
+
+// ═══════════════════════════════════════════════════════
+//  API Helpers
+// ═══════════════════════════════════════════════════════
+
+const API_BASE = '';  // Same origin
+
+async function apiPost(endpoint, body = {}) {
+    const res = await fetch(`${API_BASE}/api${endpoint}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: res.statusText }));
+        throw new Error(err.detail || 'Request failed');
+    }
+    return res.json();
+}
+
+// ═══════════════════════════════════════════════════════
+//  Session Management
+// ═══════════════════════════════════════════════════════
+
+async function startSession() {
+    btnStart.disabled = true;
+    btnStart.innerHTML = '<span class="btn-icon">⏳</span> Starting...';
+
+    try {
+        const data = await apiPost('/session/start');
+        sessionId = data.session_id;
+        localStorage.setItem('psychtrainer_session_id', sessionId); // Persist ID
+
+        // Transition UI
+        welcomeScreen.style.display = 'none';
+        chatMessages.style.display = 'flex';
+        inputBar.style.display = 'flex';
+
+        // Update header
+        updatePhase(data.phase);
+        phaseBadge.classList.add('active');
+
+        // Show system message
+        addMessage('system', data.message);
+
+        // Clear eval placeholder and add initial note
+        evalNotes.innerHTML = '';
+        addEvalNote('Session started. Observing student\'s approach...', 'neutral');
+
+        // Focus input
+        messageInput.focus();
+
+    } catch (err) {
+        console.error('Failed to start session:', err);
+        btnStart.disabled = false;
+        btnStart.innerHTML = '<span class="btn-icon">▶</span> Begin Session';
+        addMessage('system', `⚠️ Failed to start: ${err.message}`);
+    }
+}
+
+async function resumeSession() {
+    const savedId = localStorage.getItem('psychtrainer_session_id');
+    if (!savedId) return;
+
+    try {
+        const res = await fetch(`${API_BASE}/api/session/${savedId}`);
+        if (!res.ok) throw new Error('Session check failed');
+        
+        const data = await res.json();
+        sessionId = data.session_id;
+
+        // Restore UI State
+        welcomeScreen.style.display = 'none';
+        
+        if (data.is_ended && data.grade_report) {
+            displayGradeReport(data.grade_report);
+            updatePhase('debrief');
+        } else {
+            chatMessages.style.display = 'flex';
+            inputBar.style.display = 'flex';
+            updatePhase(data.phase);
+            phaseBadge.classList.add('active');
+            
+            // Restore Messages
+            chatMessages.innerHTML = '';
+            data.messages.forEach(msg => {
+                // Map backend role to frontend role
+                const roleMap = {'human': 'student', 'ai': 'patient', 'user': 'student', 'assistant': 'patient'};
+                // Backend MessageRole enum: student, patient
+                // pydantic ChatMessage.role is string "student" or "patient"
+                addMessage(msg.role, msg.content);
+            });
+            turnCounter.textContent = `Turn ${data.turn_count}`;
+            evalNotes.innerHTML = '';
+            addEvalNote('Session restored.', 'neutral');
+        }
+
+    } catch (err) {
+        console.warn('Could not resume session:', err);
+        localStorage.removeItem('psychtrainer_session_id');
+    }
+}
+
+async function endSession() {
+    if (!sessionId) return;
+    if (!confirm('End the session and receive your grade?')) return;
+
+    btnEnd.disabled = true;
+    btnEnd.textContent = 'Generating Grade...';
+    setInputEnabled(false);
+
+    try {
+        const data = await apiPost('/session/end', { session_id: sessionId });
+        displayGradeReport(data.report);
+        addMessage('system', '📋 Session ended. Your grade report is ready in the panel →');
+        updatePhase('debrief');
+        // Keep ID in storage so reload shows grade, but maybe add "New Session" button logic later
+    } catch (err) {
+        console.error('Failed to end session:', err);
+        addMessage('system', `⚠️ Grading error: ${err.message}`);
+        btnEnd.disabled = false;
+        btnEnd.textContent = 'End Session & Get Grade';
+    }
+}
+
+// Auto-resume on load
+resumeSession();
+
+// ═══════════════════════════════════════════════════════
+//  Chat Logic
+// ═══════════════════════════════════════════════════════
+
+async function sendMessage() {
+    const text = messageInput.value.trim();
+    if (!text || isWaitingForResponse || !sessionId) return;
+
+    // Add student message to UI
+    addMessage('student', text);
+    messageInput.value = '';
+    autoResizeTextarea();
+
+    isWaitingForResponse = true;
+    setInputEnabled(false);
+    showTypingIndicator(true);
+
+    try {
+        const data = await apiPost('/session/chat', {
+            session_id: sessionId,
+            message: text,
+        });
+
+        showTypingIndicator(false);
+
+        // Add patient response
+        addMessage('patient', data.patient_response);
+
+        // Update phase and turn
+        updatePhase(data.phase);
+        turnCounter.textContent = `Turn ${data.turn_count}`;
+
+        // Add professor note to eval panel
+        if (data.professor_note) {
+            addEvalNote(data.professor_note);
+        }
+
+    } catch (err) {
+        showTypingIndicator(false);
+        addMessage('system', `⚠️ Error: ${err.message}`);
+    } finally {
+        isWaitingForResponse = false;
+        setInputEnabled(true);
+        messageInput.focus();
+    }
+}
+
+// ═══════════════════════════════════════════════════════
+//  UI Helpers
+// ═══════════════════════════════════════════════════════
+
+function addMessage(role, content) {
+    const wrapper = document.createElement('div');
+    wrapper.className = `message ${role}`;
+
+    const avatars = {
+        patient: '🧑',
+        student: '👩‍⚕️',
+        system: '🔔',
+    };
+
+    wrapper.innerHTML = `
+        <div class="message-avatar">${avatars[role] || '💬'}</div>
+        <div class="message-bubble">${escapeHtml(content)}</div>
+    `;
+
+    chatMessages.appendChild(wrapper);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+}
+
+function addEvalNote(text, forceType = null) {
+    // Determine note type from content
+    let type = forceType || 'neutral';
+    if (!forceType) {
+        if (text.startsWith('[+]')) type = 'positive';
+        else if (text.startsWith('[-]')) type = 'negative';
+        else if (text.startsWith('[~]')) type = 'neutral';
+    }
+
+    const note = document.createElement('div');
+    note.className = `eval-note ${type}`;
+    note.textContent = text;
+
+    evalNotes.appendChild(note);
+    evalNotes.scrollTop = evalNotes.scrollHeight;
+}
+
+function updatePhase(phase) {
+    const labels = {
+        introduction: '📋 INTRODUCTION',
+        examination: '🔍 EXAMINATION',
+        diagnosis: '🩺 DIAGNOSIS',
+        debrief: '📝 DEBRIEF',
+    };
+    phaseLabel.textContent = labels[phase] || phase.toUpperCase();
+}
+
+function showTypingIndicator(show) {
+    typingIndicator.style.display = show ? 'flex' : 'none';
+    if (show) {
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+}
+
+function setInputEnabled(enabled) {
+    messageInput.disabled = !enabled;
+    btnSend.disabled = !enabled;
+}
+
+function handleKeyDown(event) {
+    if (event.key === 'Enter' && !event.shiftKey) {
+        event.preventDefault();
+        sendMessage();
+    }
+}
+
+function autoResizeTextarea() {
+    messageInput.style.height = 'auto';
+    messageInput.style.height = Math.min(messageInput.scrollHeight, 120) + 'px';
+}
+
+messageInput.addEventListener('input', autoResizeTextarea);
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// ═══════════════════════════════════════════════════════
+//  Grade Report Display
+// ═══════════════════════════════════════════════════════
+
+function displayGradeReport(report) {
+    // Hide eval notes, show grade report
+    evalNotes.style.display = 'none';
+    gradeReport.style.display = 'block';
+
+    // Score circle
+    document.getElementById('grade-letter').textContent = report.letter_grade;
+    document.getElementById('grade-score').textContent = `${report.overall_score}/100`;
+
+    // Color the circle based on grade
+    const circle = document.getElementById('grade-circle');
+    const gradeColors = {
+        'A': 'linear-gradient(135deg, #10b981, #059669)',
+        'B': 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+        'C': 'linear-gradient(135deg, #f59e0b, #d97706)',
+        'D': 'linear-gradient(135deg, #ef4444, #dc2626)',
+        'F': 'linear-gradient(135deg, #ef4444, #991b1b)',
+    };
+    circle.style.background = gradeColors[report.letter_grade] || gradeColors['C'];
+
+    // Summary
+    document.getElementById('grade-summary').textContent = report.summary;
+
+    // Criteria bars
+    const criteriaList = document.getElementById('criteria-list');
+    criteriaList.innerHTML = '';
+
+    report.criteria.forEach((c, i) => {
+        const pct = (c.score / 10) * 100;
+        const color = pct >= 70 ? '#10b981' : pct >= 40 ? '#f59e0b' : '#ef4444';
+
+        const item = document.createElement('div');
+        item.className = 'criterion-item';
+        item.style.animationDelay = `${i * 0.1}s`;
+
+        item.innerHTML = `
+            <div class="criterion-header">
+                <span class="criterion-name">${escapeHtml(c.criterion)}</span>
+                <span class="criterion-score-label">${c.score}/10</span>
+            </div>
+            <div class="criterion-bar">
+                <div class="criterion-fill" style="background: ${color};"></div>
+            </div>
+            <div class="criterion-feedback">${escapeHtml(c.feedback)}</div>
+        `;
+
+        criteriaList.appendChild(item);
+
+        // Animate the bar fill after a short delay
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+                item.querySelector('.criterion-fill').style.width = `${pct}%`;
+            });
+        });
+    });
+
+    // Strengths
+    const strengthsList = document.getElementById('strengths-list');
+    strengthsList.innerHTML = '';
+    report.strengths.forEach(s => {
+        const li = document.createElement('li');
+        li.textContent = s;
+        strengthsList.appendChild(li);
+    });
+
+    // Improvements
+    const improvementsList = document.getElementById('improvements-list');
+    improvementsList.innerHTML = '';
+    report.improvements.forEach(s => {
+        const li = document.createElement('li');
+        li.textContent = s;
+        improvementsList.appendChild(li);
+    });
+}
