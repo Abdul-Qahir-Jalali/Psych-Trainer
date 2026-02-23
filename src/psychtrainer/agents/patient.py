@@ -95,6 +95,12 @@ use ONLY the following verified medical facts (do not invent any):
 {medical_context}
 
 ═══════════════════════════════════════════════════
+  PREVIOUS CONVERSATION MEMORY (If long session)
+═══════════════════════════════════════════════════
+
+{summary}
+
+═══════════════════════════════════════════════════
   CURRENT PHASE: {phase}
 ═══════════════════════════════════════════════════
 
@@ -134,6 +140,7 @@ def patient_node(state: SimulationState, config: RunnableConfig, retriever: Retr
         medical_context=medical_context,
         phase=phase.value,
         few_shot_examples=state.get("few_shot_examples", ""),
+        summary=state.get("summary", "None available yet."),
     )
 
     messages = [{"role": "system", "content": system_prompt}]

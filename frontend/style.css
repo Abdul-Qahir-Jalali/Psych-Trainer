@@ -60,7 +60,9 @@ body {
   font-family: var(--font-sans);
   background: var(--bg-primary);
   color: var(--text-primary);
-  min-height: 100vh;
+  height: 100vh;
+  margin: 0;
+  padding: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -190,8 +192,8 @@ body {
 #app-main {
   display: flex;
   flex: 1;
+  min-height: 0;
   overflow: hidden;
-  height: calc(100vh - 60px);
 }
 
 /* ═══════════════════════════════════════════════════════
@@ -204,6 +206,7 @@ body {
   background: var(--bg-primary);
   position: relative;
   min-width: 0;
+  min-height: 0;
 }
 
 /* ── Welcome Screen ──────────────────────────────────── */
@@ -333,6 +336,7 @@ body {
 /* ── Chat Messages ───────────────────────────────────── */
 .chat-messages {
   flex: 1;
+  min-height: 0; /* Fixes flex children expanding beyond container */
   overflow-y: auto;
   padding: 20px 24px;
   display: flex;
@@ -431,6 +435,7 @@ body {
   padding: 8px 24px;
   color: var(--text-muted);
   font-size: 0.85rem;
+  flex-shrink: 0;
 }
 
 .typing-avatar {
@@ -481,6 +486,7 @@ body {
 
 /* ── Input Bar ───────────────────────────────────────── */
 .input-bar {
+  flex-shrink: 0; /* Prevents being pushed off-screen */
   padding: 16px 24px;
   background: rgba(17, 24, 39, 0.6);
   -webkit-backdrop-filter: blur(12px);
