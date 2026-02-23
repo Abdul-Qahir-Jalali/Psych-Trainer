@@ -10,6 +10,7 @@ from __future__ import annotations
 import logging
 
 import litellm
+from langchain_core.runnables import RunnableConfig
 
 from psychtrainer.config import settings
 from psychtrainer.rag.knowledge import Retriever
@@ -107,7 +108,7 @@ Adjust your behaviour based on the phase:
 
 # ── The Agent Logic ──────────────────────────────────────────────
 
-def patient_node(state: SimulationState, retriever: Retriever) -> dict:
+def patient_node(state: SimulationState, config: RunnableConfig, retriever: Retriever) -> dict:
     """
     Executes the Patient's turn.
     1. Retrieves context (RAG).
@@ -141,6 +142,8 @@ def patient_node(state: SimulationState, retriever: Retriever) -> dict:
         messages.append({"role": role, "content": msg.content})
 
     # 3. Call LLM
+    stream_queue = config.get("configurable", {}).get("stream_queue")
+    
     try:
         response = litellm.completion(
             model=settings.llm_model,
@@ -148,8 +151,19 @@ def patient_node(state: SimulationState, retriever: Retriever) -> dict:
             temperature=0.7,
             max_tokens=150,
             api_key=settings.groq_api_key,
+            stream=bool(stream_queue),
         )
-        content = response.choices[0].message.content.strip()
+        
+        if stream_queue:
+            content_chunks = []
+            for chunk in response:
+                delta = chunk.choices[0].delta.content or ""
+                content_chunks.append(delta)
+                stream_queue.put(delta)
+            content = "".join(content_chunks).strip()
+        else:
+            content = response.choices[0].message.content.strip()
+            
     except Exception as e:
         logger.error(f"Patient LLM error: {e}")
         content = "I'm... not sure how to answer that."  # Better fallback

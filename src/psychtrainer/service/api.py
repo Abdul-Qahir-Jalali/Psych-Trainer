@@ -8,13 +8,17 @@ FastAPI Application — The main entry point.
 
 from __future__ import annotations
 
+import asyncio
+import json
 import logging
+import queue
 import sqlite3
 import uuid
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from langgraph.checkpoint.sqlite import SqliteSaver
 
@@ -188,6 +192,80 @@ def chat(request: ChatRequest):
         turn_count=result["turn_count"],
         professor_note=note,
     )
+
+
+@app.post("/api/session/stream_chat")
+async def stream_chat(request: ChatRequest):
+    """Process student message and stream tokens back via SSE."""
+    session_id = request.session_id
+    stream_queue = queue.Queue()
+    config = {
+        "configurable": {
+            "thread_id": session_id,
+            "stream_queue": stream_queue
+        }
+    }
+    
+    # 1. State setup and validation
+    try:
+        current_state = app.state.workflow.get_state(config).values
+        if not current_state:
+             raise HTTPException(404, "Session not found")
+    except Exception:
+        raise HTTPException(404, "Session not found")
+
+    if current_state.get("is_ended"):
+        raise HTTPException(400, "Session ended. Please start new one.")
+
+    msg = ChatMessage(
+        role=MessageRole.STUDENT,
+        content=request.message,
+        metadata={"turn": current_state.get("turn_count", 0)}
+    )
+    input_update = {
+        "messages": [msg], 
+        "turn_count": current_state["turn_count"] + 1
+    }
+
+    # 2. Generator for SSE
+    async def event_generator():
+        def run_graph():
+            try:
+                result = app.state.workflow.invoke(input_update, config)
+                stream_queue.put({"__done__": True, "result": result})
+            except Exception as e:
+                logger.error(f"Graph stream error: {e}")
+                stream_queue.put({"__error__": str(e)})
+
+        loop = asyncio.get_running_loop()
+        loop.run_in_executor(None, run_graph)
+
+        while True:
+            try:
+                item = stream_queue.get_nowait()
+            except queue.Empty:
+                await asyncio.sleep(0.02)
+                continue
+
+            if isinstance(item, dict):
+                if "__done__" in item:
+                    result = item["result"]
+                    note = result.get("professor_notes", [])[-1] if result.get("professor_notes") else None
+                    phase_val = result["phase"].value if hasattr(result["phase"], "value") else result["phase"]
+                    final_data = {
+                        "phase": phase_val,
+                        "turn_count": result["turn_count"],
+                        "professor_note": note,
+                    }
+                    yield f"event: done\ndata: {json.dumps(final_data)}\n\n"
+                    break
+                elif "__error__" in item:
+                    yield f"event: error\ndata: {json.dumps({'error': item['__error__']})}\n\n"
+                    break
+            else:
+                yield f"data: {json.dumps({'token': item})}\n\n"
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
 
 
 @app.post("/api/session/end", response_model=GradeResponse)

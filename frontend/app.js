@@ -174,29 +174,91 @@ async function sendMessage() {
     setInputEnabled(false);
     showTypingIndicator(true);
 
+    let bubbleDiv = null;
+
     try {
-        const data = await apiPost('/session/chat', {
-            session_id: sessionId,
-            message: text,
+        const response = await fetch(`${API_BASE}/api/session/stream_chat`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                session_id: sessionId,
+                message: text,
+            })
         });
 
+        if (!response.ok) {
+            const err = await response.json().catch(() => ({ detail: response.statusText }));
+            throw new Error(err.detail || 'Request failed');
+        }
+
         showTypingIndicator(false);
+        
+        // Create an empty patient message bubble
+        bubbleDiv = addMessage('patient', '');
 
-        // Add patient response
-        addMessage('patient', data.patient_response);
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder("utf-8");
 
-        // Update phase and turn
-        updatePhase(data.phase);
-        turnCounter.textContent = `Turn ${data.turn_count}`;
+        let done = false;
+        let buffer = "";
 
-        // Add professor note to eval panel
-        if (data.professor_note) {
-            addEvalNote(data.professor_note);
+        while (!done) {
+            const { value, done: readerDone } = await reader.read();
+            if (value) {
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split('\n');
+                buffer = lines.pop(); // Keep incomplete line
+
+                let currentEvent = null;
+
+                for (let i = 0; i < lines.length; i++) {
+                    const line = lines[i].trim();
+                    if (!line) continue;
+
+                    if (line.startsWith('event: ')) {
+                         currentEvent = line.substring(7).trim();
+                    } else if (line.startsWith('data: ')) {
+                         const dataStr = line.substring(6).trim();
+                         try {
+                              const data = JSON.parse(dataStr);
+                              
+                              if (currentEvent === 'done') {
+                                  updatePhase(data.phase);
+                                  turnCounter.textContent = `Turn ${data.turn_count}`;
+                                  if (data.professor_note) {
+                                      addEvalNote(data.professor_note);
+                                  }
+                                  done = true;
+                                  break;
+                              } else if (currentEvent === 'error') {
+                                  throw new Error(data.error);
+                              } else {
+                                  if (data.token) {
+                                      const currentText = bubbleDiv.dataset.text || '';
+                                      const newText = currentText + data.token;
+                                      bubbleDiv.dataset.text = newText;
+                                      bubbleDiv.innerHTML = escapeHtml(newText).replace(/\n/g, '<br>');
+                                      chatMessages.scrollTop = chatMessages.scrollHeight;
+                                  }
+                              }
+                         } catch (e) {
+                              console.warn("Parse error", e);
+                         }
+                         currentEvent = null;
+                    }
+                }
+            }
+            if (readerDone) {
+                done = true;
+            }
         }
 
     } catch (err) {
         showTypingIndicator(false);
         addMessage('system', `⚠️ Error: ${err.message}`);
+        if (bubbleDiv && !bubbleDiv.textContent) {
+             bubbleDiv.parentElement.remove();
+        }
     } finally {
         isWaitingForResponse = false;
         setInputEnabled(true);
@@ -220,11 +282,21 @@ function addMessage(role, content) {
 
     wrapper.innerHTML = `
         <div class="message-avatar">${avatars[role] || '💬'}</div>
-        <div class="message-bubble">${escapeHtml(content)}</div>
+        <div class="message-bubble"></div>
     `;
+
+    const bubble = wrapper.querySelector('.message-bubble');
+    if (content) {
+        bubble.dataset.text = content;
+        bubble.innerHTML = escapeHtml(content).replace(/\n/g, '<br>');
+    } else {
+        bubble.dataset.text = "";
+    }
 
     chatMessages.appendChild(wrapper);
     chatMessages.scrollTop = chatMessages.scrollHeight;
+    
+    return bubble;
 }
 
 function addEvalNote(text, forceType = null) {
