@@ -55,7 +55,16 @@ async def lifespan(app: FastAPI):
     conn = sqlite3.connect(db_path, check_same_thread=False)
     checkpointer = SqliteSaver(conn)
     
-    # 2. RAG & Workflow
+    # 2. Observability (LangSmith)
+    import litellm
+    if settings.langchain_tracing_v2.lower() == "true" and settings.langchain_api_key:
+        logger.info("LangSmith tracing enabled via LiteLLM.")
+        litellm.success_callback = ["langsmith"]
+        litellm.failure_callback = ["langsmith"]
+    else:
+        logger.info("LangSmith tracing is disabled.")
+
+    # 3. RAG & Workflow
     retriever = Retriever()
     examples = load_few_shot_examples()
     workflow = build_workflow(retriever, checkpointer=checkpointer)

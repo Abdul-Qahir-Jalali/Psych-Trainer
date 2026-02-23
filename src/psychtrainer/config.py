@@ -6,12 +6,16 @@ the app fails fast with a clear error message.
 """
 
 from pathlib import Path
+from dotenv import load_dotenv
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 # Project root is two levels up from this file (src/psychtrainer/config.py → project root)
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 DATA_DIR = PROJECT_ROOT / "data"
+
+# Load .env globally so external libraries (litellm, langchain) can access it
+load_dotenv(PROJECT_ROOT / ".env")
 
 
 class Settings(BaseSettings):
@@ -54,6 +58,11 @@ class Settings(BaseSettings):
     chunk_size: int = 500
     chunk_overlap: int = 80
     top_k: int = 5
+
+    # ── Observability (LangSmith) ────────────────────────
+    langchain_tracing_v2: str = "false"
+    langchain_api_key: str = ""
+    langchain_project: str = "PsychTrainer"
 
 
 # Singleton — import `settings` from anywhere
