@@ -988,8 +988,32 @@ body {
     font-size: 1.1rem;
   }
 
-  .welcome-content {
+  /* Hide the 'Clinical Simulation Platform' subtitle on very narrow screens to save space */
+  .subtitle {
+    display: none;
+  }
+
+  /* Shrink badges so they fit next to the title */
+  .phase-badge {
+    padding: 4px 8px;
+    font-size: 0.65rem;
+    gap: 4px;
+  }
+
+  .turn-counter {
+    padding: 4px 8px;
+    font-size: 0.65rem;
+  }
+
+  .welcome-screen {
     padding: 20px;
+    align-items: flex-start; /* Stop flex-centering to allow natural overflow */
+    overflow-y: auto;        /* Let users scroll to see the Begin Session btn */
+  }
+
+  .welcome-content {
+    margin-top: 0;           /* Remove the negative lift on mobile since it clips */
+    padding-bottom: 40px;    /* Give space at the bottom when scrolled */
   }
 
   .welcome-content h2 {
