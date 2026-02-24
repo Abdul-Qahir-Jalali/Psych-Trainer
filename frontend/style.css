@@ -331,7 +331,7 @@ body {
 .welcome-content {
   max-width: 520px;
   text-align: center;
-  margin-top: -15vh; /* Visually pull the block upwards to counteract bottom input bar weight */
+  margin-top: -8vh; /* Reduced from -15vh to prevent the top of the icon from clipping */
 }
 
 .welcome-icon {
