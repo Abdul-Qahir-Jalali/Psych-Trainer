@@ -1059,7 +1059,7 @@ body {
   .chat-panel {
     display: flex !important;
   }
-  .evaluation-panel {
+  .eval-panel {
     display: none !important;
     width: 100% !important; /* Override the 380px fixed width */
     border-left: none !important;
@@ -1069,7 +1069,14 @@ body {
   body.show-eval-mobile .chat-panel {
     display: none !important;
   }
-  body.show-eval-mobile .evaluation-panel {
+  body.show-eval-mobile .eval-panel {
     display: flex !important;
+  }
+
+  /* Prevent sidebar from squashing vertical height on mobile column layouts */
+  .sidebar {
+    position: absolute;
+    height: 100%;
+    z-index: 1000;
   }
 }
