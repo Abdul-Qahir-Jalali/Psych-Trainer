@@ -78,6 +78,7 @@ class SimulationState(TypedDict):
     Tracks everything happening in the session.
     """
     session_id: str
+    title: str
     phase: Phase
     # Use custom reducer to allow appending normal messages, but overwriting when summarizing
     messages: Annotated[list[ChatMessage], replace_or_append_messages]

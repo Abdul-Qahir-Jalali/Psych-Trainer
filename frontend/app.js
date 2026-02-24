@@ -176,7 +176,7 @@ async function loadSessionsList() {
             const item = document.createElement('div');
             item.className = 'session-item';
             item.dataset.id = s.session_id;
-            item.textContent = `Session: ${s.session_id}`;
+            item.textContent = s.title || `Session: ${s.session_id}`;
             if (s.session_id === sessionId) {
                 item.classList.add('active');
             }

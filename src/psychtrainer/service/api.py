@@ -13,6 +13,7 @@ import json
 import logging
 import queue
 import sqlite3
+import threading
 import uuid
 from contextlib import asynccontextmanager
 
@@ -98,20 +99,71 @@ app.add_middleware(
 app.include_router(socket_router, prefix="/api")
 
 
+def generate_title_task(session_id: str, student_msg: str, patient_msg: str, app: FastAPI):
+    """Background task to generate a conversational title using the LLM."""
+    try:
+        import litellm
+        from psychtrainer.config import settings
+
+        prompt = (
+            "Summarize the following exchange into a short, professional, 3-5 word title "
+            "for a clinical interview session. DO NOT use quotes. Example: 'OCD Initial Assessment' or 'Sleep Trouble History'.\n\n"
+            f"Student: {student_msg}\nPatient: {patient_msg}"
+        )
+        response = litellm.completion(
+            model=settings.llm_model,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.3,
+            max_tokens=20,
+            api_key=settings.groq_api_key,
+        )
+        title = response.choices[0].message.content.strip().strip('"').strip("'")
+        
+        # Save to LangGraph state
+        config = {"configurable": {"thread_id": session_id}}
+        app.state.workflow.update_state(config, {"title": title})
+        logger.info(f"Generated title for {session_id}: {title}")
+    except Exception as e:
+        logger.error(f"Title generation failed: {e}")
+
 # ── REST Endpoints (Sync for ThreadPool execution) ────────────────
 
 @app.get("/api/sessions")
 def list_sessions():
-    """Returns a list of all historical session IDs sorted by recent activity."""
+    """Returns a list of all historical session IDs with their dynamically generated titles."""
     conn = app.state.conn
     cursor = conn.cursor()
     try:
-        # LangGraph schema: checkpoints (thread_id, checkpoint_id, ...)
-        # The checkpoint_id is a sortable string. Grouping by thread_id gets us distinct sessions.
-        cursor.execute("SELECT thread_id, MAX(checkpoint_id) as last_activity FROM checkpoints GROUP BY thread_id ORDER BY last_activity DESC LIMIT 50")
+        # Get latest distinct sessions
+        cursor.execute(
+            "SELECT thread_id, MAX(checkpoint_id) as last_activity "
+            "FROM checkpoints GROUP BY thread_id ORDER BY last_activity DESC LIMIT 50"
+        )
         rows = cursor.fetchall()
-        # Filter out empty threads
-        sessions = [{"session_id": row[0]} for row in rows if row[0]]
+
+        sessions = []
+        for row in rows:
+            thread_id = row[0]
+            if not thread_id:
+                continue
+            
+            # Fetch state to get title (or generate fallback)
+            try:
+                state = app.state.workflow.get_state({"configurable": {"thread_id": thread_id}}).values
+                title = state.get("title")
+                
+                if not title or title == "New Conversation":
+                    messages = state.get("messages", [])
+                    if messages and messages[0].role.value == "student":
+                        msg = messages[0].content
+                        title = (msg[:30] + "...") if len(msg) > 30 else msg
+                    else:
+                        title = "New Conversation"
+
+                sessions.append({"session_id": thread_id, "title": title})
+            except Exception:
+                sessions.append({"session_id": thread_id, "title": f"Session {thread_id[:6]}"})
+
         return {"sessions": sessions}
     except Exception as e:
         logger.error(f"Failed to list sessions: {e}")
@@ -126,6 +178,7 @@ def start_session():
     # Initialize State
     initial_state = {
         "session_id": session_id,
+        "title": "New Conversation",
         "phase": Phase.INTRODUCTION,
         "messages": [],
         "professor_notes": [],
@@ -204,13 +257,16 @@ def chat(request: ChatRequest):
     
     # 3. Extract Response
     patient_reply = ""
-    # Search history backwards for latest patient message
     for m in reversed(result["messages"]):
         if m.role == MessageRole.PATIENT:
             patient_reply = m.content
             break
             
     note = result.get("professor_notes", [])[-1] if result.get("professor_notes") else None
+
+    # 4. Async Title Generation on turn 1
+    if result["turn_count"] == 1:
+        threading.Thread(target=generate_title_task, args=(request.session_id, request.message, patient_reply, app)).start()
 
     return ChatResponse(
         session_id=request.session_id,
@@ -277,6 +333,17 @@ async def stream_chat(request: ChatRequest):
             if isinstance(item, dict):
                 if "__done__" in item:
                     result = item["result"]
+                    
+                    # 3. Async Title Generation on turn 1
+                    if result["turn_count"] == 1:
+                        patient_reply = ""
+                        for m in reversed(result["messages"]):
+                            if m.role == MessageRole.PATIENT:
+                                patient_reply = m.content
+                                break
+                        loop = asyncio.get_running_loop()
+                        loop.run_in_executor(None, generate_title_task, session_id, request.message, patient_reply, app)
+
                     note = result.get("professor_notes", [])[-1] if result.get("professor_notes") else None
                     phase_val = result["phase"].value if hasattr(result["phase"], "value") else result["phase"]
                     final_data = {
