@@ -60,7 +60,9 @@ body {
   font-family: var(--font-sans);
   background: var(--bg-primary);
   color: var(--text-primary);
-  min-height: 100vh;
+  height: 100vh;
+  margin: 0;
+  padding: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -101,6 +103,29 @@ body {
   display: flex;
   align-items: center;
   gap: 12px;
+}
+
+.btn-header-icon {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 6px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.btn-header-icon:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.btn-header-icon svg {
+  width: 20px;
+  height: 20px;
 }
 
 .logo-icon {
@@ -190,12 +215,106 @@ body {
 #app-main {
   display: flex;
   flex: 1;
+  min-height: 0;
   overflow: hidden;
-  height: calc(100vh - 60px);
 }
 
 /* ═══════════════════════════════════════════════════════
-   CHAT PANEL (LEFT)
+   SIDEBAR (LEFT)
+   ═══════════════════════════════════════════════════════ */
+.sidebar {
+  width: 260px;
+  max-height: 100vh;
+  background: rgba(17, 24, 39, 0.95);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  padding: 16px 12px;
+  gap: 16px;
+  flex-shrink: 0;
+  transition: margin-left var(--transition-smooth), transform var(--transition-smooth);
+}
+
+.sidebar.closed {
+  margin-left: -260px;
+  transform: translateX(-100%);
+}
+
+.sidebar-top-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.btn-sidebar-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 12px;
+  background: transparent;
+  color: var(--text-primary);
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: 0.95rem;
+  transition: background var(--transition-fast);
+}
+
+.btn-sidebar-item:hover {
+  background: var(--bg-hover);
+}
+
+.sidebar-icon {
+  width: 18px;
+  height: 18px;
+  color: var(--text-primary);
+  flex-shrink: 0;
+}
+
+.sidebar-divider {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  font-weight: 500;
+  padding: 8px 12px 0;
+}
+
+.session-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0; /* Critical for flex child scrolling */
+  padding-right: 4px; /* Room for scrollbar */
+}
+
+.session-item {
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: background var(--transition-fast), color var(--transition-fast);
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.session-item:hover {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+.session-item.active {
+  background: var(--accent);
+  color: white;
+}
+
+/* ═══════════════════════════════════════════════════════
+   CHAT PANEL (CENTER)
    ═══════════════════════════════════════════════════════ */
 .chat-panel {
   flex: 1;
@@ -204,6 +323,7 @@ body {
   background: var(--bg-primary);
   position: relative;
   min-width: 0;
+  min-height: 0;
 }
 
 /* ── Welcome Screen ──────────────────────────────────── */
@@ -218,6 +338,7 @@ body {
 .welcome-content {
   max-width: 520px;
   text-align: center;
+  margin-top: -15vh; /* Visually pull the block upwards to counteract bottom input bar weight */
 }
 
 .welcome-icon {
@@ -333,6 +454,7 @@ body {
 /* ── Chat Messages ───────────────────────────────────── */
 .chat-messages {
   flex: 1;
+  min-height: 0; /* Fixes flex children expanding beyond container */
   overflow-y: auto;
   padding: 20px 24px;
   display: flex;
@@ -431,6 +553,7 @@ body {
   padding: 8px 24px;
   color: var(--text-muted);
   font-size: 0.85rem;
+  flex-shrink: 0;
 }
 
 .typing-avatar {
@@ -481,6 +604,7 @@ body {
 
 /* ── Input Bar ───────────────────────────────────────── */
 .input-bar {
+  flex-shrink: 0; /* Prevents being pushed off-screen */
   padding: 16px 24px;
   background: rgba(17, 24, 39, 0.6);
   -webkit-backdrop-filter: blur(12px);

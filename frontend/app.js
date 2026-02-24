@@ -29,6 +29,8 @@ const phaseLabel      = document.getElementById('phase-label');
 const turnCounter     = document.getElementById('turn-counter');
 const evalNotes       = document.getElementById('eval-notes');
 const gradeReport     = document.getElementById('grade-report');
+const sessionList     = document.getElementById('session-list');
+const sidebar         = document.getElementById('sidebar');
 
 // ═══════════════════════════════════════════════════════
 //  API Helpers
@@ -61,6 +63,7 @@ async function startSession() {
         const data = await apiPost('/session/start');
         sessionId = data.session_id;
         localStorage.setItem('psychtrainer_session_id', sessionId); // Persist ID
+        await loadSessionsList(); // Refresh sidebar
 
         // Transition UI
         welcomeScreen.style.display = 'none';
@@ -89,16 +92,21 @@ async function startSession() {
     }
 }
 
-async function resumeSession() {
-    const savedId = localStorage.getItem('psychtrainer_session_id');
-    if (!savedId) return;
+async function loadSession(id) {
+    if (!id) return;
 
     try {
-        const res = await fetch(`${API_BASE}/api/session/${savedId}`);
+        const res = await fetch(`${API_BASE}/api/session/${id}`);
         if (!res.ok) throw new Error('Session check failed');
         
         const data = await res.json();
         sessionId = data.session_id;
+        localStorage.setItem('psychtrainer_session_id', sessionId);
+
+        // Update active class in sidebar
+        document.querySelectorAll('.session-item').forEach(el => {
+            el.classList.toggle('active', el.dataset.id === sessionId);
+        });
 
         // Restore UI State
         welcomeScreen.style.display = 'none';
@@ -106,31 +114,93 @@ async function resumeSession() {
         if (data.is_ended && data.grade_report) {
             displayGradeReport(data.grade_report);
             updatePhase('debrief');
+            chatMessages.style.display = 'none';
+            inputBar.style.display = 'none';
         } else {
             chatMessages.style.display = 'flex';
             inputBar.style.display = 'flex';
+            gradeReport.style.display = 'none';
+            evalNotes.style.display = 'block';
             updatePhase(data.phase);
             phaseBadge.classList.add('active');
             
             // Restore Messages
             chatMessages.innerHTML = '';
             data.messages.forEach(msg => {
-                // Map backend role to frontend role
-                const roleMap = {'human': 'student', 'ai': 'patient', 'user': 'student', 'assistant': 'patient'};
-                // Backend MessageRole enum: student, patient
-                // pydantic ChatMessage.role is string "student" or "patient"
                 addMessage(msg.role, msg.content);
             });
             turnCounter.textContent = `Turn ${data.turn_count}`;
             evalNotes.innerHTML = '';
             addEvalNote('Session restored.', 'neutral');
+            
+            chatMessages.scrollTop = chatMessages.scrollHeight;
         }
 
     } catch (err) {
-        console.warn('Could not resume session:', err);
-        localStorage.removeItem('psychtrainer_session_id');
+        console.warn('Could not load session:', err);
     }
 }
+
+function newSession() {
+    sessionId = null;
+    localStorage.removeItem('psychtrainer_session_id');
+    
+    // Reset UI to Welcome Screen
+    welcomeScreen.style.display = 'flex';
+    chatMessages.style.display = 'none';
+    inputBar.style.display = 'none';
+    gradeReport.style.display = 'none';
+    evalNotes.style.display = 'block';
+    evalNotes.innerHTML = '';
+    
+    // Reset Header
+    phaseBadge.classList.remove('active');
+    updatePhase('introduction');
+    turnCounter.textContent = 'Turn 0';
+
+    // Remove active state from sidebar
+    document.querySelectorAll('.session-item').forEach(el => el.classList.remove('active'));
+    
+    // Reset buttons
+    btnStart.disabled = false;
+    btnStart.innerHTML = '<span class="btn-icon">▶</span> Begin Session';
+}
+
+async function loadSessionsList() {
+    try {
+        const res = await fetch(`${API_BASE}/api/sessions`);
+        if (!res.ok) throw new Error('Failed to fetch sessions');
+        const data = await res.json();
+        
+        sessionList.innerHTML = '';
+        data.sessions.forEach(s => {
+            const item = document.createElement('div');
+            item.className = 'session-item';
+            item.dataset.id = s.session_id;
+            item.textContent = s.title || `Session: ${s.session_id}`;
+            if (s.session_id === sessionId) {
+                item.classList.add('active');
+            }
+            item.onclick = () => loadSession(s.session_id);
+            sessionList.appendChild(item);
+        });
+    } catch (err) {
+        console.warn('Could not load sessions list:', err);
+    }
+}
+
+// Initial Load Logic
+async function initApp() {
+    await loadSessionsList();
+    // User requested ChatGPT style: open on a fresh new conversation
+    newSession();
+}
+
+initApp();
+
+// ═══════════════════════════════════════════════════════
+//  Chat Logic
+// ═══════════════════════════════════════════════════════
 
 async function endSession() {
     if (!sessionId) return;
@@ -143,9 +213,11 @@ async function endSession() {
     try {
         const data = await apiPost('/session/end', { session_id: sessionId });
         displayGradeReport(data.report);
+        chatMessages.style.display = 'none';
+        inputBar.style.display = 'none';
         addMessage('system', '📋 Session ended. Your grade report is ready in the panel →');
         updatePhase('debrief');
-        // Keep ID in storage so reload shows grade, but maybe add "New Session" button logic later
+        await loadSessionsList(); // Refresh sidebar to show new state
     } catch (err) {
         console.error('Failed to end session:', err);
         addMessage('system', `⚠️ Grading error: ${err.message}`);
@@ -153,13 +225,6 @@ async function endSession() {
         btnEnd.textContent = 'End Session & Get Grade';
     }
 }
-
-// Auto-resume on load
-resumeSession();
-
-// ═══════════════════════════════════════════════════════
-//  Chat Logic
-// ═══════════════════════════════════════════════════════
 
 async function sendMessage() {
     const text = messageInput.value.trim();
@@ -174,29 +239,91 @@ async function sendMessage() {
     setInputEnabled(false);
     showTypingIndicator(true);
 
+    let bubbleDiv = null;
+
     try {
-        const data = await apiPost('/session/chat', {
-            session_id: sessionId,
-            message: text,
+        const response = await fetch(`${API_BASE}/api/session/stream_chat`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                session_id: sessionId,
+                message: text,
+            })
         });
 
+        if (!response.ok) {
+            const err = await response.json().catch(() => ({ detail: response.statusText }));
+            throw new Error(err.detail || 'Request failed');
+        }
+
         showTypingIndicator(false);
+        
+        // Create an empty patient message bubble
+        bubbleDiv = addMessage('patient', '');
 
-        // Add patient response
-        addMessage('patient', data.patient_response);
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder("utf-8");
 
-        // Update phase and turn
-        updatePhase(data.phase);
-        turnCounter.textContent = `Turn ${data.turn_count}`;
+        let done = false;
+        let buffer = "";
 
-        // Add professor note to eval panel
-        if (data.professor_note) {
-            addEvalNote(data.professor_note);
+        while (!done) {
+            const { value, done: readerDone } = await reader.read();
+            if (value) {
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split('\n');
+                buffer = lines.pop(); // Keep incomplete line
+
+                let currentEvent = null;
+
+                for (let i = 0; i < lines.length; i++) {
+                    const line = lines[i].trim();
+                    if (!line) continue;
+
+                    if (line.startsWith('event: ')) {
+                         currentEvent = line.substring(7).trim();
+                    } else if (line.startsWith('data: ')) {
+                         const dataStr = line.substring(6).trim();
+                         try {
+                              const data = JSON.parse(dataStr);
+                              
+                              if (currentEvent === 'done') {
+                                  updatePhase(data.phase);
+                                  turnCounter.textContent = `Turn ${data.turn_count}`;
+                                  if (data.professor_note) {
+                                      addEvalNote(data.professor_note);
+                                  }
+                                  done = true;
+                                  break;
+                              } else if (currentEvent === 'error') {
+                                  throw new Error(data.error);
+                              } else {
+                                  if (data.token) {
+                                      const currentText = bubbleDiv.dataset.text || '';
+                                      const newText = currentText + data.token;
+                                      bubbleDiv.dataset.text = newText;
+                                      bubbleDiv.innerHTML = escapeHtml(newText).replace(/\n/g, '<br>');
+                                      chatMessages.scrollTop = chatMessages.scrollHeight;
+                                  }
+                              }
+                         } catch (e) {
+                              console.warn("Parse error", e);
+                         }
+                         currentEvent = null;
+                    }
+                }
+            }
+            if (readerDone) {
+                done = true;
+            }
         }
 
     } catch (err) {
         showTypingIndicator(false);
         addMessage('system', `⚠️ Error: ${err.message}`);
+        if (bubbleDiv && !bubbleDiv.textContent) {
+             bubbleDiv.parentElement.remove();
+        }
     } finally {
         isWaitingForResponse = false;
         setInputEnabled(true);
@@ -220,11 +347,21 @@ function addMessage(role, content) {
 
     wrapper.innerHTML = `
         <div class="message-avatar">${avatars[role] || '💬'}</div>
-        <div class="message-bubble">${escapeHtml(content)}</div>
+        <div class="message-bubble"></div>
     `;
+
+    const bubble = wrapper.querySelector('.message-bubble');
+    if (content) {
+        bubble.dataset.text = content;
+        bubble.innerHTML = escapeHtml(content).replace(/\n/g, '<br>');
+    } else {
+        bubble.dataset.text = "";
+    }
 
     chatMessages.appendChild(wrapper);
     chatMessages.scrollTop = chatMessages.scrollHeight;
+    
+    return bubble;
 }
 
 function addEvalNote(text, forceType = null) {
@@ -279,6 +416,10 @@ function autoResizeTextarea() {
 }
 
 messageInput.addEventListener('input', autoResizeTextarea);
+
+function toggleSidebar() {
+    sidebar.classList.toggle('closed');
+}
 
 function escapeHtml(text) {
     const div = document.createElement('div');

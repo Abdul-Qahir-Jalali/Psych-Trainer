@@ -15,6 +15,7 @@ from langgraph.graph import END, StateGraph
 
 from psychtrainer.agents.patient import patient_node
 from psychtrainer.agents.professor import professor_node
+from psychtrainer.agents.summarizer import summarize_conversation_node
 from psychtrainer.config import settings
 from psychtrainer.rag.knowledge import Retriever
 from psychtrainer.workflow.state import Phase, SimulationState
@@ -115,12 +116,15 @@ def build_workflow(retriever: Retriever, checkpointer=None) -> StateGraph:
     graph = StateGraph(SimulationState)
 
     # Add Nodes
+    graph.add_node("summarizer", summarize_conversation_node)
     graph.add_node("patient", patient)
     graph.add_node("professor", professor)
     graph.add_node("router", _router_node)
 
     # Define Edges
-    graph.set_entry_point("patient")
+    # Entry point is summarizer. It checks length, compresses if needed, then ALWAYS goes to patient.
+    graph.set_entry_point("summarizer")
+    graph.add_edge("summarizer", "patient")
     graph.add_edge("patient", "professor")
     graph.add_edge("professor", "router")
     graph.add_conditional_edges(

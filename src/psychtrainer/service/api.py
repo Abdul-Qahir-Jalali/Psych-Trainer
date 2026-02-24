@@ -8,13 +8,18 @@ FastAPI Application — The main entry point.
 
 from __future__ import annotations
 
+import asyncio
+import json
 import logging
+import queue
 import sqlite3
+import threading
 import uuid
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from langgraph.checkpoint.sqlite import SqliteSaver
 
@@ -29,6 +34,7 @@ from psychtrainer.service.schema import (
     GradeResponse,
     SessionStartResponse,
     SessionStateResponse,
+    SessionListResponse,  # Will create this below or inline
 )
 from psychtrainer.service.socket import router as socket_router
 from psychtrainer.workflow.graph import build_workflow
@@ -51,7 +57,16 @@ async def lifespan(app: FastAPI):
     conn = sqlite3.connect(db_path, check_same_thread=False)
     checkpointer = SqliteSaver(conn)
     
-    # 2. RAG & Workflow
+    # 2. Observability (LangSmith)
+    import litellm
+    if settings.langchain_tracing_v2.lower() == "true" and settings.langchain_api_key:
+        logger.info("LangSmith tracing enabled via LiteLLM.")
+        litellm.success_callback = ["langsmith"]
+        litellm.failure_callback = ["langsmith"]
+    else:
+        logger.info("LangSmith tracing is disabled.")
+
+    # 3. RAG & Workflow
     retriever = Retriever()
     examples = load_few_shot_examples()
     workflow = build_workflow(retriever, checkpointer=checkpointer)
@@ -84,7 +99,75 @@ app.add_middleware(
 app.include_router(socket_router, prefix="/api")
 
 
+def generate_title_task(session_id: str, student_msg: str, patient_msg: str, app: FastAPI):
+    """Background task to generate a conversational title using the LLM."""
+    try:
+        import litellm
+        from psychtrainer.config import settings
+
+        prompt = (
+            "Summarize the following exchange into a short, professional, 3-5 word title "
+            "for a clinical interview session. DO NOT use quotes. Example: 'OCD Initial Assessment' or 'Sleep Trouble History'.\n\n"
+            f"Student: {student_msg}\nPatient: {patient_msg}"
+        )
+        response = litellm.completion(
+            model=settings.llm_model,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.3,
+            max_tokens=20,
+            api_key=settings.groq_api_key,
+        )
+        title = response.choices[0].message.content.strip().strip('"').strip("'")
+        
+        # Save to LangGraph state
+        config = {"configurable": {"thread_id": session_id}}
+        app.state.workflow.update_state(config, {"title": title})
+        logger.info(f"Generated title for {session_id}: {title}")
+    except Exception as e:
+        logger.error(f"Title generation failed: {e}")
+
 # ── REST Endpoints (Sync for ThreadPool execution) ────────────────
+
+@app.get("/api/sessions")
+def list_sessions():
+    """Returns a list of all historical session IDs with their dynamically generated titles."""
+    conn = app.state.conn
+    cursor = conn.cursor()
+    try:
+        # Get latest distinct sessions
+        cursor.execute(
+            "SELECT thread_id, MAX(checkpoint_id) as last_activity "
+            "FROM checkpoints GROUP BY thread_id ORDER BY last_activity DESC LIMIT 50"
+        )
+        rows = cursor.fetchall()
+
+        sessions = []
+        for row in rows:
+            thread_id = row[0]
+            if not thread_id:
+                continue
+            
+            # Fetch state to get title (or generate fallback)
+            try:
+                state = app.state.workflow.get_state({"configurable": {"thread_id": thread_id}}).values
+                title = state.get("title")
+                
+                if not title or title == "New Conversation":
+                    messages = state.get("messages", [])
+                    if messages and messages[0].role.value == "student":
+                        msg = messages[0].content
+                        title = (msg[:30] + "...") if len(msg) > 30 else msg
+                    else:
+                        title = "New Conversation"
+
+                sessions.append({"session_id": thread_id, "title": title})
+            except Exception:
+                sessions.append({"session_id": thread_id, "title": f"Session {thread_id[:6]}"})
+
+        return {"sessions": sessions}
+    except Exception as e:
+        logger.error(f"Failed to list sessions: {e}")
+        return {"sessions": []}
 
 @app.post("/api/session/start", response_model=SessionStartResponse)
 def start_session():
@@ -95,6 +178,7 @@ def start_session():
     # Initialize State
     initial_state = {
         "session_id": session_id,
+        "title": "New Conversation",
         "phase": Phase.INTRODUCTION,
         "messages": [],
         "professor_notes": [],
@@ -173,13 +257,16 @@ def chat(request: ChatRequest):
     
     # 3. Extract Response
     patient_reply = ""
-    # Search history backwards for latest patient message
     for m in reversed(result["messages"]):
         if m.role == MessageRole.PATIENT:
             patient_reply = m.content
             break
             
     note = result.get("professor_notes", [])[-1] if result.get("professor_notes") else None
+
+    # 4. Async Title Generation on turn 1
+    if result["turn_count"] == 1:
+        threading.Thread(target=generate_title_task, args=(request.session_id, request.message, patient_reply, app)).start()
 
     return ChatResponse(
         session_id=request.session_id,
@@ -188,6 +275,91 @@ def chat(request: ChatRequest):
         turn_count=result["turn_count"],
         professor_note=note,
     )
+
+
+@app.post("/api/session/stream_chat")
+async def stream_chat(request: ChatRequest):
+    """Process student message and stream tokens back via SSE."""
+    session_id = request.session_id
+    stream_queue = queue.Queue()
+    config = {
+        "configurable": {
+            "thread_id": session_id,
+            "stream_queue": stream_queue
+        }
+    }
+    
+    # 1. State setup and validation
+    try:
+        current_state = app.state.workflow.get_state(config).values
+        if not current_state:
+             raise HTTPException(404, "Session not found")
+    except Exception:
+        raise HTTPException(404, "Session not found")
+
+    if current_state.get("is_ended"):
+        raise HTTPException(400, "Session ended. Please start new one.")
+
+    msg = ChatMessage(
+        role=MessageRole.STUDENT,
+        content=request.message,
+        metadata={"turn": current_state.get("turn_count", 0)}
+    )
+    input_update = {
+        "messages": [msg], 
+        "turn_count": current_state["turn_count"] + 1
+    }
+
+    # 2. Generator for SSE
+    async def event_generator():
+        def run_graph():
+            try:
+                result = app.state.workflow.invoke(input_update, config)
+                stream_queue.put({"__done__": True, "result": result})
+            except Exception as e:
+                logger.error(f"Graph stream error: {e}")
+                stream_queue.put({"__error__": str(e)})
+
+        loop = asyncio.get_running_loop()
+        loop.run_in_executor(None, run_graph)
+
+        while True:
+            try:
+                item = stream_queue.get_nowait()
+            except queue.Empty:
+                await asyncio.sleep(0.02)
+                continue
+
+            if isinstance(item, dict):
+                if "__done__" in item:
+                    result = item["result"]
+                    
+                    # 3. Async Title Generation on turn 1
+                    if result["turn_count"] == 1:
+                        patient_reply = ""
+                        for m in reversed(result["messages"]):
+                            if m.role == MessageRole.PATIENT:
+                                patient_reply = m.content
+                                break
+                        loop = asyncio.get_running_loop()
+                        loop.run_in_executor(None, generate_title_task, session_id, request.message, patient_reply, app)
+
+                    note = result.get("professor_notes", [])[-1] if result.get("professor_notes") else None
+                    phase_val = result["phase"].value if hasattr(result["phase"], "value") else result["phase"]
+                    final_data = {
+                        "phase": phase_val,
+                        "turn_count": result["turn_count"],
+                        "professor_note": note,
+                    }
+                    yield f"event: done\ndata: {json.dumps(final_data)}\n\n"
+                    break
+                elif "__error__" in item:
+                    yield f"event: error\ndata: {json.dumps({'error': item['__error__']})}\n\n"
+                    break
+            else:
+                yield f"data: {json.dumps({'token': item})}\n\n"
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
 
 
 @app.post("/api/session/end", response_model=GradeResponse)

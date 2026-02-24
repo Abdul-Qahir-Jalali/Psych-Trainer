@@ -14,6 +14,18 @@ from typing import Annotated, Any, TypedDict
 
 from pydantic import BaseModel, Field
 
+def replace_or_append_messages(left: list[ChatMessage], right: list[ChatMessage] | dict) -> list[ChatMessage]:
+    """
+    Custom reducer.
+    If 'right' is a dict with '__replace__': True, we overwrite the list.
+    Otherwise, we append the messages as usual.
+    """
+    if isinstance(right, dict) and right.get("__replace__"):
+        return right.get("messages", [])
+    if isinstance(right, list):
+        return left + right
+    return left + [right]  # Fallback if single message passed
+
 
 # ── Core Enums ───────────────────────────────────────────────────
 
@@ -66,9 +78,10 @@ class SimulationState(TypedDict):
     Tracks everything happening in the session.
     """
     session_id: str
+    title: str
     phase: Phase
-    # Use Annotated with operator.add to append messages instead of overwriting
-    messages: Annotated[list[ChatMessage], operator.add]
+    # Use custom reducer to allow appending normal messages, but overwriting when summarizing
+    messages: Annotated[list[ChatMessage], replace_or_append_messages]
     professor_notes: Annotated[list[str], operator.add]
     turn_count: int
     patient_context: str
@@ -76,4 +89,5 @@ class SimulationState(TypedDict):
     medical_context: str
     few_shot_examples: str
     is_ended: bool
+    summary: str
     grade_report: GradeReport | None

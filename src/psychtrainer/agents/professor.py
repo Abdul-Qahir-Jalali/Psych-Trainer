@@ -81,6 +81,12 @@ Score each of these areas on a 0-10 scale:
 {grading_criteria}
 
 ═══════════════════════════════════════════════════
+  PREVIOUS CONVERSATION MEMORY (If long session)
+═══════════════════════════════════════════════════
+
+{summary}
+
+═══════════════════════════════════════════════════
   INSTRUCTIONS
 ═══════════════════════════════════════════════════
 
@@ -149,7 +155,10 @@ def professor_node(state: SimulationState, retriever: Retriever) -> dict:
         logger.error(f"Retriever error (Professor): {e}")
         criteria = ""
 
-    prompt = PROFESSOR_SYSTEM_PROMPT.format(grading_criteria=criteria)
+    prompt = PROFESSOR_SYSTEM_PROMPT.format(
+        grading_criteria=criteria,
+        summary=state.get("summary", "None available yet.")
+    )
     conversation_text = "\n".join(
         f"{m.role.value.upper()}: {m.content}" for m in state["messages"]
     )
