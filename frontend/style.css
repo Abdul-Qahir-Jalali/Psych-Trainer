@@ -90,7 +90,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 24px;
+  padding: 12px 24px 12px 64px; /* extra left padding for the floating tools */
   background: rgba(17, 24, 39, 0.8);
   -webkit-backdrop-filter: blur(20px);
   backdrop-filter: blur(20px);
@@ -106,9 +106,14 @@ body {
 }
 
 .header-tools {
+  position: absolute;
+  left: 12px;
+  top: 12px;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 4px;
+  gap: 8px;
+  z-index: 200;
 }
 
 .btn-header-icon {
