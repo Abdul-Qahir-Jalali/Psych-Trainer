@@ -23,6 +23,24 @@ const messageInput    = document.getElementById('message-input');
 const btnSend         = document.getElementById('btn-send');
 const btnStart        = document.getElementById('btn-start');
 const btnEnd          = document.getElementById('btn-end');
+
+// ═══════════════════════════════════════════════════════
+//  Mobile Responsiveness Toggles
+// ═══════════════════════════════════════════════════════
+
+function switchMobileTab(target) {
+  const tabs = document.querySelectorAll('.mobile-tab');
+  
+  if (target === 'chat') {
+    document.body.classList.remove('show-eval-mobile');
+    tabs[0].classList.add('active'); // Chat tab
+    tabs[1].classList.remove('active'); // Eval tab
+  } else if (target === 'eval') {
+    document.body.classList.add('show-eval-mobile');
+    tabs[1].classList.add('active'); // Eval tab
+    tabs[0].classList.remove('active'); // Chat tab
+  }
+}
 const typingIndicator = document.getElementById('typing-indicator');
 const phaseBadge      = document.getElementById('phase-badge');
 const phaseLabel      = document.getElementById('phase-label');

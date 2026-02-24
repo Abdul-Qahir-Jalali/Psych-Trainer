@@ -995,4 +995,57 @@ body {
   .welcome-content h2 {
     font-size: 1.3rem;
   }
+
+  /* ── Mobile Tab Overrides ── */
+  .mobile-tabs {
+    display: flex !important;
+    width: 100%;
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border);
+    padding: 8px 16px;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+
+  .mobile-tab {
+    flex: 1;
+    padding: 8px;
+    background: transparent;
+    color: var(--text-muted);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    font-weight: 600;
+    cursor: pointer;
+    text-align: center;
+    transition: var(--transition-fast);
+  }
+
+  .mobile-tab.active {
+    background: var(--bg-primary);
+    color: var(--accent-primary);
+    border-color: var(--accent-primary);
+  }
+
+  /* When on mobile, main-content must stack to allow swapping */
+  .main-content {
+    flex-direction: column;
+  }
+
+  /* Default mobile state: Chat visible, Eval hidden */
+  .chat-panel {
+    display: flex !important;
+  }
+  .evaluation-panel {
+    display: none !important;
+    width: 100% !important; /* Override the 380px fixed width */
+    border-left: none !important;
+  }
+
+  /* Toggled mobile state via JS body class */
+  body.show-eval-mobile .chat-panel {
+    display: none !important;
+  }
+  body.show-eval-mobile .evaluation-panel {
+    display: flex !important;
+  }
 }
