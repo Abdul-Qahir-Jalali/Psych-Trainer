@@ -30,6 +30,11 @@ class SessionStateResponse(BaseModel):
     grade_report: GradeReport | None = None
 
 
+class SessionListResponse(BaseModel):
+    """Payload for GET /api/sessions"""
+    sessions: list[dict[str, str]]
+
+
 # ── Chat Operations ──────────────────────────────────────────────
 
 class ChatRequest(BaseModel):

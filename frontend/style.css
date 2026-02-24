@@ -197,7 +197,72 @@ body {
 }
 
 /* ═══════════════════════════════════════════════════════
-   CHAT PANEL (LEFT)
+   SIDEBAR (LEFT)
+   ═══════════════════════════════════════════════════════ */
+.sidebar {
+  width: 260px;
+  background: rgba(17, 24, 39, 0.95);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  padding: 16px;
+  gap: 16px;
+  flex-shrink: 0;
+  overflow-y: auto;
+}
+
+.btn-new-chat {
+  width: 100%;
+  padding: 12px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-family: var(--font-sans);
+  font-size: 0.95rem;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.2s ease;
+}
+
+.btn-new-chat:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.session-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.session-item {
+  padding: 12px;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: all 0.2s ease;
+}
+
+.session-item:hover {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+.session-item.active {
+  background: var(--accent);
+  color: white;
+}
+
+/* ═══════════════════════════════════════════════════════
+   CHAT PANEL (CENTER)
    ═══════════════════════════════════════════════════════ */
 .chat-panel {
   flex: 1;

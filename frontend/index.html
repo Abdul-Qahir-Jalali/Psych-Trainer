@@ -41,7 +41,17 @@
     <!--  MAIN LAYOUT                                       -->
     <!-- ═══════════════════════════════════════════════════ -->
     <main id="app-main">
-      <!-- LEFT: Chat Panel -->
+      <!-- SIDEBAR -->
+      <aside class="sidebar" id="sidebar">
+        <button class="btn-new-chat" onclick="newSession()">
+          <span class="btn-icon">➕</span> New Session
+        </button>
+        <div class="session-list" id="session-list">
+          <!-- Session items will be dynamically injected here -->
+        </div>
+      </aside>
+
+      <!-- CENTER: Chat Panel -->
       <section class="chat-panel" id="chat-panel">
         <!-- Welcome Screen (shown before session starts) -->
         <div class="welcome-screen" id="welcome-screen">

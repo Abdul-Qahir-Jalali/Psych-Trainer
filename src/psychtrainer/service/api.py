@@ -33,6 +33,7 @@ from psychtrainer.service.schema import (
     GradeResponse,
     SessionStartResponse,
     SessionStateResponse,
+    SessionListResponse,  # Will create this below or inline
 )
 from psychtrainer.service.socket import router as socket_router
 from psychtrainer.workflow.graph import build_workflow
@@ -98,6 +99,23 @@ app.include_router(socket_router, prefix="/api")
 
 
 # ── REST Endpoints (Sync for ThreadPool execution) ────────────────
+
+@app.get("/api/sessions")
+def list_sessions():
+    """Returns a list of all historical session IDs sorted by recent activity."""
+    conn = app.state.conn
+    cursor = conn.cursor()
+    try:
+        # LangGraph schema: checkpoints (thread_id, checkpoint_id, ...)
+        # The checkpoint_id is a sortable string. Grouping by thread_id gets us distinct sessions.
+        cursor.execute("SELECT thread_id, MAX(checkpoint_id) as last_activity FROM checkpoints GROUP BY thread_id ORDER BY last_activity DESC LIMIT 50")
+        rows = cursor.fetchall()
+        # Filter out empty threads
+        sessions = [{"session_id": row[0]} for row in rows if row[0]]
+        return {"sessions": sessions}
+    except Exception as e:
+        logger.error(f"Failed to list sessions: {e}")
+        return {"sessions": []}
 
 @app.post("/api/session/start", response_model=SessionStartResponse)
 def start_session():

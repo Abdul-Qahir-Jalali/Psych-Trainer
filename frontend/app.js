@@ -29,6 +29,7 @@ const phaseLabel      = document.getElementById('phase-label');
 const turnCounter     = document.getElementById('turn-counter');
 const evalNotes       = document.getElementById('eval-notes');
 const gradeReport     = document.getElementById('grade-report');
+const sessionList     = document.getElementById('session-list');
 
 // ═══════════════════════════════════════════════════════
 //  API Helpers
@@ -61,6 +62,7 @@ async function startSession() {
         const data = await apiPost('/session/start');
         sessionId = data.session_id;
         localStorage.setItem('psychtrainer_session_id', sessionId); // Persist ID
+        await loadSessionsList(); // Refresh sidebar
 
         // Transition UI
         welcomeScreen.style.display = 'none';
@@ -89,16 +91,21 @@ async function startSession() {
     }
 }
 
-async function resumeSession() {
-    const savedId = localStorage.getItem('psychtrainer_session_id');
-    if (!savedId) return;
+async function loadSession(id) {
+    if (!id) return;
 
     try {
-        const res = await fetch(`${API_BASE}/api/session/${savedId}`);
+        const res = await fetch(`${API_BASE}/api/session/${id}`);
         if (!res.ok) throw new Error('Session check failed');
         
         const data = await res.json();
         sessionId = data.session_id;
+        localStorage.setItem('psychtrainer_session_id', sessionId);
+
+        // Update active class in sidebar
+        document.querySelectorAll('.session-item').forEach(el => {
+            el.classList.toggle('active', el.dataset.id === sessionId);
+        });
 
         // Restore UI State
         welcomeScreen.style.display = 'none';
@@ -106,31 +113,93 @@ async function resumeSession() {
         if (data.is_ended && data.grade_report) {
             displayGradeReport(data.grade_report);
             updatePhase('debrief');
+            chatMessages.style.display = 'none';
+            inputBar.style.display = 'none';
         } else {
             chatMessages.style.display = 'flex';
             inputBar.style.display = 'flex';
+            gradeReport.style.display = 'none';
+            evalNotes.style.display = 'block';
             updatePhase(data.phase);
             phaseBadge.classList.add('active');
             
             // Restore Messages
             chatMessages.innerHTML = '';
             data.messages.forEach(msg => {
-                // Map backend role to frontend role
-                const roleMap = {'human': 'student', 'ai': 'patient', 'user': 'student', 'assistant': 'patient'};
-                // Backend MessageRole enum: student, patient
-                // pydantic ChatMessage.role is string "student" or "patient"
                 addMessage(msg.role, msg.content);
             });
             turnCounter.textContent = `Turn ${data.turn_count}`;
             evalNotes.innerHTML = '';
             addEvalNote('Session restored.', 'neutral');
+            
+            chatMessages.scrollTop = chatMessages.scrollHeight;
         }
 
     } catch (err) {
-        console.warn('Could not resume session:', err);
-        localStorage.removeItem('psychtrainer_session_id');
+        console.warn('Could not load session:', err);
     }
 }
+
+function newSession() {
+    sessionId = null;
+    localStorage.removeItem('psychtrainer_session_id');
+    
+    // Reset UI to Welcome Screen
+    welcomeScreen.style.display = 'flex';
+    chatMessages.style.display = 'none';
+    inputBar.style.display = 'none';
+    gradeReport.style.display = 'none';
+    evalNotes.style.display = 'block';
+    evalNotes.innerHTML = '';
+    
+    // Reset Header
+    phaseBadge.classList.remove('active');
+    updatePhase('introduction');
+    turnCounter.textContent = 'Turn 0';
+
+    // Remove active state from sidebar
+    document.querySelectorAll('.session-item').forEach(el => el.classList.remove('active'));
+    
+    // Reset buttons
+    btnStart.disabled = false;
+    btnStart.innerHTML = '<span class="btn-icon">▶</span> Begin Session';
+}
+
+async function loadSessionsList() {
+    try {
+        const res = await fetch(`${API_BASE}/api/sessions`);
+        if (!res.ok) throw new Error('Failed to fetch sessions');
+        const data = await res.json();
+        
+        sessionList.innerHTML = '';
+        data.sessions.forEach(s => {
+            const item = document.createElement('div');
+            item.className = 'session-item';
+            item.dataset.id = s.session_id;
+            item.textContent = `Session: ${s.session_id}`;
+            if (s.session_id === sessionId) {
+                item.classList.add('active');
+            }
+            item.onclick = () => loadSession(s.session_id);
+            sessionList.appendChild(item);
+        });
+    } catch (err) {
+        console.warn('Could not load sessions list:', err);
+    }
+}
+
+// Initial Load Logic
+async function initApp() {
+    await loadSessionsList();
+    // User requested ChatGPT style: open on a fresh new conversation
+    newSession();
+}
+
+initApp();
+
+// ═══════════════════════════════════════════════════════
+//  Chat Logic
+// ═══════════════════════════════════════════════════════
 
 async function endSession() {
     if (!sessionId) return;
@@ -143,9 +212,11 @@ async function endSession() {
     try {
         const data = await apiPost('/session/end', { session_id: sessionId });
         displayGradeReport(data.report);
+        chatMessages.style.display = 'none';
+        inputBar.style.display = 'none';
         addMessage('system', '📋 Session ended. Your grade report is ready in the panel →');
         updatePhase('debrief');
-        // Keep ID in storage so reload shows grade, but maybe add "New Session" button logic later
+        await loadSessionsList(); // Refresh sidebar to show new state
     } catch (err) {
         console.error('Failed to end session:', err);
         addMessage('system', `⚠️ Grading error: ${err.message}`);
@@ -153,13 +224,6 @@ async function endSession() {
         btnEnd.textContent = 'End Session & Get Grade';
     }
 }
-
-// Auto-resume on load
-resumeSession();
-
-// ═══════════════════════════════════════════════════════
-//  Chat Logic
-// ═══════════════════════════════════════════════════════
 
 async function sendMessage() {
     const text = messageInput.value.trim();
