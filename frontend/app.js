@@ -30,6 +30,7 @@ const turnCounter     = document.getElementById('turn-counter');
 const evalNotes       = document.getElementById('eval-notes');
 const gradeReport     = document.getElementById('grade-report');
 const sessionList     = document.getElementById('session-list');
+const sidebar         = document.getElementById('sidebar');
 
 // ═══════════════════════════════════════════════════════
 //  API Helpers
@@ -415,6 +416,10 @@ function autoResizeTextarea() {
 }
 
 messageInput.addEventListener('input', autoResizeTextarea);
+
+function toggleSidebar() {
+    sidebar.classList.toggle('closed');
+}
 
 function escapeHtml(text) {
     const div = document.createElement('div');
