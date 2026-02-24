@@ -29,18 +29,36 @@
             <line x1="9" y1="3" x2="9" y2="21"></line>
           </svg>
         </button>
+      </div>
+      
+      <div class="header-center">
         <div class="logo-icon">🧠</div>
-        <div>
+        <div class="header-title-wrapper">
           <h1>PsychTrainer</h1>
+          <!-- Mobile only version dropdown chevron -->
+          <svg class="mobile-chevron" viewBox="0 0 24 24" width="16" height="16" stroke="gray" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" style="display: none;"><polyline points="6 9 12 15 18 9"></polyline></svg>
           <p class="subtitle">Clinical Simulation Platform</p>
         </div>
       </div>
+
       <div class="header-right">
-        <div class="phase-badge" id="phase-badge">
-          <span class="phase-dot"></span>
-          <span id="phase-label">OFFLINE</span>
+        <!-- Status Badges (Hidden on mobile) -->
+        <div class="header-badges">
+          <div class="phase-badge" id="phase-badge">
+            <span class="phase-dot"></span>
+            <span id="phase-label">OFFLINE</span>
+          </div>
+          <div class="turn-counter" id="turn-counter">Turn 0</div>
         </div>
-        <div class="turn-counter" id="turn-counter">Turn 0</div>
+        <!-- Action Icons (Shown only on mobile) -->
+        <div class="header-mobile-actions" style="display: none;">
+          <button class="btn-header-icon" title="New Session" onclick="newSession()">
+             <svg stroke="currentColor" fill="none" stroke-width="2" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><path d="M16 21v-2a4 4 0 0 0-4-4H5c-1.1 0-2 .9-2 2v2"></path><circle cx="8.5" cy="7" r="4"></circle><line x1="20" y1="8" x2="20" y2="14"></line><line x1="23" y1="11" x2="17" y2="11"></line></svg>
+          </button>
+          <button class="btn-header-icon" title="Search" onclick="alert('Search feature coming soon!')">
+             <svg stroke="currentColor" fill="none" stroke-width="2" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+          </button>
+        </div>
       </div>
     </header>
 
