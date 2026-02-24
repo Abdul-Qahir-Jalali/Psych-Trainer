@@ -105,7 +105,13 @@ body {
   gap: 12px;
 }
 
-.btn-toggle-sidebar {
+.header-tools {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.btn-header-icon {
   background: transparent;
   border: none;
   color: var(--text-muted);
@@ -118,12 +124,12 @@ body {
   transition: background var(--transition-fast), color var(--transition-fast);
 }
 
-.btn-toggle-sidebar:hover {
+.btn-header-icon:hover {
   background: var(--bg-hover);
   color: var(--text-primary);
 }
 
-.btn-toggle-sidebar svg {
+.btn-header-icon svg {
   width: 20px;
   height: 20px;
 }
