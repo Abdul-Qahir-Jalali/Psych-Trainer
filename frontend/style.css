@@ -90,7 +90,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 24px 12px 64px; /* extra left padding for the floating tools */
+  padding: 12px 24px 12px 56px; /* slightly smaller left padding */
   background: rgba(17, 24, 39, 0.8);
   -webkit-backdrop-filter: blur(20px);
   backdrop-filter: blur(20px);
@@ -107,7 +107,7 @@ body {
 
 .header-tools {
   position: absolute;
-  left: 12px;
+  left: 8px; /* Pulled further left to match ChatGPT spacing */
   top: 12px;
   display: flex;
   flex-direction: column;
@@ -239,7 +239,7 @@ body {
   border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
-  padding: 16px 16px 16px 64px; /* added 64px left padding so content clears the fixed tools */
+  padding: 16px 16px 16px 48px; /* Reduced to align perfectly with the header icons */
   gap: 16px;
   flex-shrink: 0;
   overflow-y: auto;
