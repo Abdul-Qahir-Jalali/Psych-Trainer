@@ -12,7 +12,6 @@ import asyncio
 import json
 import logging
 import queue
-import sqlite3
 import threading
 import uuid
 from contextlib import asynccontextmanager
@@ -21,7 +20,8 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
-from langgraph.checkpoint.sqlite import SqliteSaver
+from psycopg_pool import ConnectionPool
+from langgraph.checkpoint.postgres import PostgresSaver
 
 from psychtrainer.agents.professor import generate_final_grade
 from psychtrainer.config import settings
@@ -53,9 +53,10 @@ async def lifespan(app: FastAPI):
     logger.info("Initializing PsychTrainer...")
     
     # 1. Database Connection
-    db_path = settings.PROJECT_ROOT / "psychtrainer.db"
-    conn = sqlite3.connect(db_path, check_same_thread=False)
-    checkpointer = SqliteSaver(conn)
+    # Uses psycopg connection pool for concurrent connections
+    pool = ConnectionPool(conninfo=settings.postgres_uri)
+    checkpointer = PostgresSaver(pool)
+    checkpointer.setup() # Automatically creates all LangGraph tables if they don't exist
     
     # 2. Observability (LangSmith)
     import litellm
@@ -72,7 +73,7 @@ async def lifespan(app: FastAPI):
     workflow = build_workflow(retriever, checkpointer=checkpointer)
     
     # 3. Store in App State
-    app.state.conn = conn
+    app.state.pool = pool
     app.state.checkpointer = checkpointer
     app.state.retriever = retriever
     app.state.few_shot_examples = examples
@@ -82,7 +83,7 @@ async def lifespan(app: FastAPI):
     yield
     
     logger.info("🛑 Shutting down & closing DB...")
-    conn.close()
+    pool.close()
 
 
 app = FastAPI(title="PsychTrainer", version="3.1.0", lifespan=lifespan)
