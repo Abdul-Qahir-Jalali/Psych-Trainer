@@ -14,6 +14,7 @@ import logging
 import queue
 import threading
 import uuid
+import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Depends
@@ -435,5 +436,8 @@ def end_session(request: GradeRequest, user_id: str = Depends(get_current_user))
     )
 
 
+import os
+
 # Mount Static
-app.mount("/", StaticFiles(directory="frontend", html=True), name="static")
+frontend_dir = "frontend-react/dist" if os.path.exists("frontend-react/dist") else "frontend"
+app.mount("/", StaticFiles(directory=frontend_dir, html=True), name="static")
