@@ -57,6 +57,10 @@ class Settings(BaseSettings):
     # ── Database ─────────────────────────────────────────
     postgres_uri: str = ""
 
+    # ── Authentication ───────────────────────────────────
+    supabase_url: str = ""
+    supabase_anon_key: str = ""
+
     # ── RAG ──────────────────────────────────────────────
     chunk_size: int = 500
     chunk_overlap: int = 80

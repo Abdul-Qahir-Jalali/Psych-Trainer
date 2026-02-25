@@ -51,15 +51,99 @@ const sessionList     = document.getElementById('session-list');
 const sidebar         = document.getElementById('sidebar');
 
 // ═══════════════════════════════════════════════════════
+//  Authentication (Supabase)
+// ═══════════════════════════════════════════════════════
+
+const SUPABASE_URL = 'https://xlkriwqjkbfepbuvsvch.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_xVLDBnTqgRAeTN1obV5veA_QxOJLdoV';
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+let sessionToken = null;
+
+// Listen for auth changes
+supabase.auth.onAuthStateChange((event, session) => {
+    const loginScreen = document.getElementById('login-screen');
+    const appHeader = document.getElementById('app-header');
+    const appMain = document.getElementById('app-main');
+    
+    if (session) {
+        sessionToken = session.access_token;
+        loginScreen.style.display = 'none';
+        appHeader.style.display = 'flex';
+        appMain.style.display = 'flex';
+        initApp(); // Loads lists and starts session if needed
+    } else {
+        sessionToken = null;
+        loginScreen.style.display = 'flex';
+        appHeader.style.display = 'none';
+        appMain.style.display = 'none';
+    }
+});
+
+async function handleLogin() {
+    const email = document.getElementById('auth-email').value;
+    const password = document.getElementById('auth-password').value;
+    const errorDiv = document.getElementById('auth-error');
+    const btn = document.getElementById('btn-login');
+    
+    if(!email || !password) return;
+    btn.textContent = 'Loading...';
+    
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    
+    btn.textContent = 'Log In';
+    if (error) {
+        errorDiv.textContent = error.message;
+        errorDiv.style.color = '#ff6b6b';
+        errorDiv.style.display = 'block';
+    } else {
+        errorDiv.style.display = 'none';
+    }
+}
+
+async function handleSignUp() {
+    const email = document.getElementById('auth-email').value;
+    const password = document.getElementById('auth-password').value;
+    const errorDiv = document.getElementById('auth-error');
+    const btn = document.getElementById('btn-signup');
+    
+    if(!email || !password) return;
+    btn.textContent = 'Loading...';
+    
+    const { error } = await supabase.auth.signUp({ email, password });
+    
+    btn.textContent = 'Sign Up';
+    if (error) {
+        errorDiv.textContent = error.message;
+        errorDiv.style.color = '#ff6b6b';
+        errorDiv.style.display = 'block';
+    } else {
+        errorDiv.textContent = 'Success! You are now registered and logged in.';
+        errorDiv.style.color = '#10b981';
+        errorDiv.style.display = 'block';
+    }
+}
+
+async function handleLogout() {
+    await supabase.auth.signOut();
+    sessionId = null;
+    localStorage.removeItem('psychtrainer_session_id');
+    document.getElementById('session-list').innerHTML = '';
+}
+
+// ═══════════════════════════════════════════════════════
 //  API Helpers
 // ═══════════════════════════════════════════════════════
 
 const API_BASE = '';  // Same origin
 
 async function apiPost(endpoint, body = {}) {
+    const headers = { 'Content-Type': 'application/json' };
+    if (sessionToken) headers['Authorization'] = `Bearer ${sessionToken}`;
+    
     const res = await fetch(`${API_BASE}/api${endpoint}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: headers,
         body: JSON.stringify(body),
     });
     if (!res.ok) {
@@ -114,7 +198,8 @@ async function loadSession(id) {
     if (!id) return;
 
     try {
-        const res = await fetch(`${API_BASE}/api/session/${id}`);
+        const headers = sessionToken ? { 'Authorization': `Bearer ${sessionToken}` } : {};
+        const res = await fetch(`${API_BASE}/api/session/${id}`, { headers });
         if (!res.ok) throw new Error('Session check failed');
         
         const data = await res.json();
@@ -186,7 +271,8 @@ function newSession() {
 
 async function loadSessionsList() {
     try {
-        const res = await fetch(`${API_BASE}/api/sessions`);
+        const headers = sessionToken ? { 'Authorization': `Bearer ${sessionToken}` } : {};
+        const res = await fetch(`${API_BASE}/api/sessions`, { headers });
         if (!res.ok) throw new Error('Failed to fetch sessions');
         const data = await res.json();
         
@@ -213,8 +299,6 @@ async function initApp() {
     // User requested ChatGPT style: open on a fresh new conversation
     newSession();
 }
-
-initApp();
 
 // ═══════════════════════════════════════════════════════
 //  Chat Logic
@@ -260,9 +344,12 @@ async function sendMessage() {
     let bubbleDiv = null;
 
     try {
+        const headers = { 'Content-Type': 'application/json' };
+        if (sessionToken) headers['Authorization'] = `Bearer ${sessionToken}`;
+        
         const response = await fetch(`${API_BASE}/api/session/stream_chat`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: headers,
             body: JSON.stringify({
                 session_id: sessionId,
                 message: text,

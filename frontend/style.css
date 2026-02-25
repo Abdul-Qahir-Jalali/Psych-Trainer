@@ -97,29 +97,12 @@ body {
   border-bottom: 1px solid var(--border);
   z-index: 100;
   flex-shrink: 0;
-  position: relative; /* Base for absolute centering on mobile */
 }
 
 .header-left {
   display: flex;
   align-items: center;
   gap: 12px;
-  flex: 1;
-}
-
-.header-center {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  justify-content: center;
-}
-
-.header-right {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 16px;
-  flex: 1;
 }
 
 .btn-header-icon {
@@ -150,13 +133,7 @@ body {
   filter: drop-shadow(0 0 8px var(--accent-primary-glow));
 }
 
-.header-title-wrapper {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.header-center h1 {
+.header-left h1 {
   font-size: 1.25rem;
   font-weight: 700;
   color: #000000;
@@ -170,11 +147,10 @@ body {
   text-transform: uppercase;
 }
 
-/* Badge container */
-.header-badges {
+.header-right {
   display: flex;
-  gap: 16px;
   align-items: center;
+  gap: 16px;
 }
 
 .phase-badge {
@@ -1008,47 +984,41 @@ body {
     padding: 12px 16px;
   }
 
-  /* Mobile Header Simplification */
   .header {
     padding: 10px 12px;
-    justify-content: space-between;
   }
 
-  /* Center the title absolutely for perfect balance */
-  .header-center {
-    position: absolute;
-    left: 50%;
-    transform: translateX(-50%);
+  .header-left {
+    gap: 6px; /* Bring the title closer to the logo */
+  }
+
+  .header-right {
+    gap: 8px; /* Bring the badges closer together */
   }
 
   .logo-icon {
-    display: none; /* Hide brain logo on mobile */
+    font-size: 20px; /* Shrink the brain icon */
   }
 
-  .header-center h1 {
-    font-size: 1.1rem;
-    font-weight: 600; /* Slightly lighter like ChatGPT */
-    color: var(--text-primary);
-  }
-
-  .mobile-chevron {
-    display: inline-block !important; /* Show dropdown arrow */
-  }
-
-  /* Hide the desktop badges */
-  .header-badges {
-    display: none !important;
-  }
-
-  /* Show the mobile action icons */
-  .header-mobile-actions {
-    display: flex !important;
-    gap: 4px;
+  .header-left h1 {
+    font-size: 1.05rem; /* Shrink the title slightly more */
   }
 
   /* Hide the 'Clinical Simulation Platform' subtitle on very narrow screens to save space */
   .subtitle {
     display: none;
+  }
+
+  /* Shrink badges so they fit next to the title */
+  .phase-badge {
+    padding: 4px 8px;
+    font-size: 0.65rem;
+    gap: 4px;
+  }
+
+  .turn-counter {
+    padding: 4px 8px;
+    font-size: 0.65rem;
   }
 
   .welcome-screen {
@@ -1125,4 +1095,106 @@ body {
     height: 100%;
     z-index: 1000;
   }
+}
+
+/* ═══════════════════════════════════════════════════════
+   Login Screen
+   ═══════════════════════════════════════════════════════ */
+
+.login-screen {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: var(--bg-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  font-family: var(--font-sans);
+}
+
+.login-box {
+  background: var(--bg-card);
+  padding: 3rem 2.5rem;
+  border-radius: var(--radius-lg);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.05);
+  width: 100%;
+  max-width: 420px;
+  text-align: center;
+  border: 1px solid var(--border);
+}
+
+.login-icon {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+}
+
+.login-box h2 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 0.5rem;
+}
+
+.login-box p {
+  color: var(--text-secondary);
+  font-size: 0.95rem;
+  margin-bottom: 2rem;
+  line-height: 1.5;
+}
+
+.input-group {
+  margin-bottom: 1rem;
+}
+
+.input-group input {
+  width: 100%;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 1rem;
+  transition: border-color var(--transition-fast);
+}
+
+.input-group input:focus {
+  outline: none;
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 3px var(--accent-primary-glow);
+}
+
+.auth-buttons {
+  display: flex;
+  gap: 1rem;
+  margin-top: 1.5rem;
+}
+
+.auth-buttons button {
+  flex: 1;
+  padding: 0.85rem;
+  border-radius: var(--radius-sm);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  border: none;
+  font-family: var(--font-sans);
+  font-size: 1rem;
+}
+
+.auth-buttons .btn-primary {
+  background: var(--text-primary);
+  color: var(--bg-primary);
+}
+.auth-buttons .btn-primary:hover {
+  background: #334155;
+}
+
+.auth-buttons .btn-secondary {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+}
+.auth-buttons .btn-secondary:hover {
+  background: var(--bg-hover);
 }

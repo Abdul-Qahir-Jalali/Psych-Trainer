@@ -16,10 +16,12 @@ import threading
 import uuid
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from supabase import create_client, Client
 from psycopg_pool import ConnectionPool
 from langgraph.checkpoint.postgres import PostgresSaver
 
@@ -42,6 +44,19 @@ from psychtrainer.workflow.state import ChatMessage, MessageRole, Phase
 
 logger = logging.getLogger(__name__)
 
+security = HTTPBearer()
+
+def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> str:
+    """Extracts and validates the JWT against Supabase, returning the distinct user_id."""
+    try:
+        supabase: Client = create_client(settings.supabase_url, settings.supabase_anon_key)
+        response = supabase.auth.get_user(credentials.credentials)
+        if not response.user:
+            raise ValueError("No user found.")
+        return response.user.id
+    except Exception as e:
+        logger.error(f"Auth failure: {e}")
+        raise HTTPException(status_code=401, detail="Invalid or expired authentication token")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -130,7 +145,7 @@ def generate_title_task(session_id: str, student_msg: str, patient_msg: str, app
 # ── REST Endpoints (Sync for ThreadPool execution) ────────────────
 
 @app.get("/api/sessions")
-def list_sessions():
+def list_sessions(user_id: str = Depends(get_current_user)):
     """Returns a list of all historical session IDs with their dynamically generated titles."""
     try:
         # 1. Use official Checkpointer API to safely retrieve highest-level checkpoint info
@@ -140,7 +155,7 @@ def list_sessions():
         thread_ids = []
         for c in checkpoints:
             tid = c.config.get("configurable", {}).get("thread_id")
-            if tid and tid not in seen_threads:
+            if tid and tid.startswith(f"{user_id}_") and tid not in seen_threads:
                 seen_threads.add(tid)
                 thread_ids.append(tid)
                 if len(thread_ids) >= 50:
@@ -174,9 +189,9 @@ def list_sessions():
         return {"sessions": []}
 
 @app.post("/api/session/start", response_model=SessionStartResponse)
-def start_session():
+def start_session(user_id: str = Depends(get_current_user)):
     """Begin a new session. Initializes state in DB."""
-    session_id = uuid.uuid4().hex[:12]
+    session_id = f"{user_id}_{uuid.uuid4().hex[:12]}"
     config = {"configurable": {"thread_id": session_id}}
     
     # Initialize State
@@ -206,8 +221,10 @@ def start_session():
 
 
 @app.get("/api/session/{session_id}", response_model=SessionStateResponse)
-def get_session_state(session_id: str):
+def get_session_state(session_id: str, user_id: str = Depends(get_current_user)):
     """Retrieve full session state for resumption."""
+    if not session_id.startswith(f"{user_id}_"):
+        raise HTTPException(status_code=403, detail="Unauthorized access to session")
     config = {"configurable": {"thread_id": session_id}}
     
     try:
@@ -228,8 +245,10 @@ def get_session_state(session_id: str):
 
 
 @app.post("/api/session/chat", response_model=ChatResponse)
-def chat(request: ChatRequest):
+def chat(request: ChatRequest, user_id: str = Depends(get_current_user)):
     """Process student message via persistent workflow."""
+    if not request.session_id.startswith(f"{user_id}_"):
+        raise HTTPException(status_code=403, detail="Unauthorized access to session")
     config = {"configurable": {"thread_id": request.session_id}}
     
     # Check if session exists (by trying to get state)
@@ -295,8 +314,10 @@ class AsyncQueueWrapper:
 
 
 @app.post("/api/session/stream_chat")
-async def stream_chat(request: ChatRequest):
+async def stream_chat(request: ChatRequest, user_id: str = Depends(get_current_user)):
     """Process student message and stream tokens back via SSE."""
+    if not request.session_id.startswith(f"{user_id}_"):
+        raise HTTPException(status_code=403, detail="Unauthorized access to session")
     session_id = request.session_id
     stream_queue = AsyncQueueWrapper()
     config = {
@@ -376,8 +397,10 @@ async def stream_chat(request: ChatRequest):
 
 
 @app.post("/api/session/end", response_model=GradeResponse)
-def end_session(request: GradeRequest):
+def end_session(request: GradeRequest, user_id: str = Depends(get_current_user)):
     """End session and persist grade."""
+    if not request.session_id.startswith(f"{user_id}_"):
+        raise HTTPException(status_code=403, detail="Unauthorized access to session")
     config = {"configurable": {"thread_id": request.session_id}}
     
     try:

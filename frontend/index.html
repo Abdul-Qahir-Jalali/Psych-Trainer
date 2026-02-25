@@ -15,13 +15,36 @@
       rel="stylesheet"
     />
     <link rel="stylesheet" href="style.css" />
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   </head>
   <body>
+    <!-- ═══════════════════════════════════════════════════ -->
+    <!--  LOGIN SCREEN                                       -->
+    <!-- ═══════════════════════════════════════════════════ -->
+    <div id="login-screen" class="login-screen">
+      <div class="login-box">
+        <div class="login-icon">🩺</div>
+        <h2>Welcome to PsychTrainer</h2>
+        <p>Please log in or sign up to securely access your clinical simulations.</p>
+        <div class="input-group">
+          <input type="email" id="auth-email" placeholder="Email address" required />
+        </div>
+        <div class="input-group">
+          <input type="password" id="auth-password" placeholder="Password" required />
+        </div>
+        <div id="auth-error" class="auth-error" style="display: none; color: #ff6b6b; margin-top: 10px; font-size: 0.9rem;"></div>
+        <div class="auth-buttons">
+          <button onclick="handleLogin()" id="btn-login" class="btn-primary">Log In</button>
+          <button onclick="handleSignUp()" id="btn-signup" class="btn-secondary">Sign Up</button>
+        </div>
+      </div>
+    </div>
+
     <!-- ═══════════════════════════════════════════════════ -->
     <!--  HEADER                                            -->
     <!-- ═══════════════════════════════════════════════════ -->
     <!-- ═══════════════════════════════════════════════════ -->
-    <header id="app-header">
+    <header id="app-header" style="display: none;">
       <div class="header-left">
         <button class="btn-header-icon" id="btn-toggle-sidebar" onclick="toggleSidebar()" title="Toggle Sidebar">
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -40,13 +63,20 @@
           <span id="phase-label">OFFLINE</span>
         </div>
         <div class="turn-counter" id="turn-counter">Turn 0</div>
+        <button class="btn-header-icon" onclick="handleLogout()" title="Log out" style="margin-left: 12px;">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+            <polyline points="16 17 21 12 16 7"></polyline>
+            <line x1="21" y1="12" x2="9" y2="12"></line>
+          </svg>
+        </button>
       </div>
     </header>
 
     <!-- ═══════════════════════════════════════════════════ -->
     <!--  MAIN LAYOUT                                       -->
     <!-- ═══════════════════════════════════════════════════ -->
-    <main id="app-main">
+    <main id="app-main" style="display: none;">
       <!-- SIDEBAR -->
       <aside class="sidebar closed" id="sidebar">
         <div class="sidebar-top-actions">
