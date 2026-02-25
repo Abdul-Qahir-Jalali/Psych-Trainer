@@ -277,11 +277,24 @@ def chat(request: ChatRequest):
     )
 
 
+class AsyncQueueWrapper:
+    """Bridges synchronous producer (LangGraph thread) to pure async FastAPI generator."""
+    def __init__(self):
+        self.loop = asyncio.get_running_loop()
+        self.queue = asyncio.Queue()
+        
+    def put(self, item):
+        self.loop.call_soon_threadsafe(self.queue.put_nowait, item)
+        
+    async def get(self):
+        return await self.queue.get()
+
+
 @app.post("/api/session/stream_chat")
 async def stream_chat(request: ChatRequest):
     """Process student message and stream tokens back via SSE."""
     session_id = request.session_id
-    stream_queue = queue.Queue()
+    stream_queue = AsyncQueueWrapper()
     config = {
         "configurable": {
             "thread_id": session_id,
@@ -324,11 +337,7 @@ async def stream_chat(request: ChatRequest):
         loop.run_in_executor(None, run_graph)
 
         while True:
-            try:
-                item = stream_queue.get_nowait()
-            except queue.Empty:
-                await asyncio.sleep(0.02)
-                continue
+            item = await stream_queue.get()
 
             if isinstance(item, dict):
                 if "__done__" in item:
