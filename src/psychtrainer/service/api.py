@@ -252,7 +252,7 @@ def get_session_state(session_id: str, user_id: str = Depends(get_current_user))
     )
 
 
-@app.post("/api/session/chat", response_model=ChatResponse, dependencies=[Depends(RateLimiter(times=5, seconds=60))])
+@app.post("/api/session/chat", response_model=ChatResponse, dependencies=[Depends(RateLimiter(times=10, seconds=60))])
 def chat(request: ChatRequest, user_id: str = Depends(get_current_user)):
     """Process student message via persistent workflow."""
     if not request.session_id.startswith(f"{user_id}_"):
@@ -321,7 +321,7 @@ class AsyncQueueWrapper:
         return await self.queue.get()
 
 
-@app.post("/api/session/stream_chat", dependencies=[Depends(RateLimiter(times=5, seconds=60))])
+@app.post("/api/session/stream_chat", dependencies=[Depends(RateLimiter(times=10, seconds=60))])
 async def stream_chat(request: ChatRequest, user_id: str = Depends(get_current_user)):
     """Process student message and stream tokens back via SSE."""
     if not request.session_id.startswith(f"{user_id}_"):
