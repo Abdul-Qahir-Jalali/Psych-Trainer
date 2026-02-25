@@ -131,19 +131,22 @@ def generate_title_task(session_id: str, student_msg: str, patient_msg: str, app
 @app.get("/api/sessions")
 def list_sessions():
     """Returns a list of all historical session IDs with their dynamically generated titles."""
-    conn = app.state.conn
-    cursor = conn.cursor()
     try:
-        # Get latest distinct sessions
-        cursor.execute(
-            "SELECT thread_id, MAX(checkpoint_id) as last_activity "
-            "FROM checkpoints GROUP BY thread_id ORDER BY last_activity DESC LIMIT 50"
-        )
-        rows = cursor.fetchall()
+        # 1. Use official Checkpointer API to safely retrieve highest-level checkpoint info
+        checkpoints = app.state.workflow.checkpointer.list(None)
+        
+        seen_threads = set()
+        thread_ids = []
+        for c in checkpoints:
+            tid = c.config.get("configurable", {}).get("thread_id")
+            if tid and tid not in seen_threads:
+                seen_threads.add(tid)
+                thread_ids.append(tid)
+                if len(thread_ids) >= 50:
+                    break
 
         sessions = []
-        for row in rows:
-            thread_id = row[0]
+        for thread_id in thread_ids:
             if not thread_id:
                 continue
             
