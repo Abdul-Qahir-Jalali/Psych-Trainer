@@ -24,6 +24,9 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from supabase import create_client, Client
 from psycopg_pool import ConnectionPool
 from langgraph.checkpoint.postgres import PostgresSaver
+import redis.asyncio as redis
+from fastapi_limiter import FastAPILimiter
+from fastapi_limiter.depends import RateLimiter
 
 from psychtrainer.agents.professor import generate_final_grade
 from psychtrainer.config import settings
@@ -73,6 +76,10 @@ async def lifespan(app: FastAPI):
     checkpointer = PostgresSaver(pool)
     checkpointer.setup() # Automatically creates all LangGraph tables if they don't exist
     
+    # 1b. Rate Limiting (Redis)
+    redis_client = redis.from_url(settings.redis_uri, encoding="utf8", decode_responses=True)
+    await FastAPILimiter.init(redis_client)
+    
     # 2. Observability (LangSmith)
     import litellm
     if settings.langchain_tracing_v2.lower() == "true" and settings.langchain_api_key:
@@ -99,6 +106,7 @@ async def lifespan(app: FastAPI):
     
     logger.info("🛑 Shutting down & closing DB...")
     pool.close()
+    await redis_client.close()
 
 
 app = FastAPI(title="PsychTrainer", version="3.1.0", lifespan=lifespan)
@@ -244,7 +252,7 @@ def get_session_state(session_id: str, user_id: str = Depends(get_current_user))
     )
 
 
-@app.post("/api/session/chat", response_model=ChatResponse)
+@app.post("/api/session/chat", response_model=ChatResponse, dependencies=[Depends(RateLimiter(times=5, seconds=60))])
 def chat(request: ChatRequest, user_id: str = Depends(get_current_user)):
     """Process student message via persistent workflow."""
     if not request.session_id.startswith(f"{user_id}_"):
@@ -313,7 +321,7 @@ class AsyncQueueWrapper:
         return await self.queue.get()
 
 
-@app.post("/api/session/stream_chat")
+@app.post("/api/session/stream_chat", dependencies=[Depends(RateLimiter(times=5, seconds=60))])
 async def stream_chat(request: ChatRequest, user_id: str = Depends(get_current_user)):
     """Process student message and stream tokens back via SSE."""
     if not request.session_id.startswith(f"{user_id}_"):

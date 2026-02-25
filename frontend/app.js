@@ -357,6 +357,9 @@ async function sendMessage() {
         });
 
         if (!response.ok) {
+            if (response.status === 429) {
+                throw new Error("You are speaking too fast. Please wait a moment.");
+            }
             const err = await response.json().catch(() => ({ detail: response.statusText }));
             throw new Error(err.detail || 'Request failed');
         }

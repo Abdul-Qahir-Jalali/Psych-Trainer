@@ -430,6 +430,19 @@ wheels = [
 ]
 
 [[package]]
+name = "fastapi-limiter"
+version = "0.2.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "fastapi" },
+    { name = "pyrate-limiter" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/b7/32/81f64b69a79345caca0a90d1601ae7c84c39438145793514ee82daac4fc6/fastapi_limiter-0.2.0.tar.gz", hash = "sha256:b042259f6280056b5b2b3f506edd76c8e0648d7a5ce86c3485216a4a0fd0ec14", size = 7401, upload-time = "2026-02-06T07:00:09.831Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/c4/9b/35278a18254f187d55bb450ded6bc9a59c7b3010d164e1796f3dfb7aa73d/fastapi_limiter-0.2.0-py3-none-any.whl", hash = "sha256:e576ebb29cc9614c2f38471c60ed0e849024e9a1b7a2aeb4c2a31a6d708b4aea", size = 5219, upload-time = "2026-02-06T07:00:07.824Z" },
+]
+
+[[package]]
 name = "fastembed"
 version = "0.7.4"
 source = { registry = "https://pypi.org/simple" }
@@ -1955,6 +1968,7 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "fastapi" },
+    { name = "fastapi-limiter" },
     { name = "fastembed" },
     { name = "httpx" },
     { name = "langchain" },
@@ -1971,6 +1985,7 @@ dependencies = [
     { name = "pypdf" },
     { name = "python-dotenv" },
     { name = "qdrant-client" },
+    { name = "redis" },
     { name = "sentence-transformers" },
     { name = "supabase" },
     { name = "uvicorn", extra = ["standard"] },
@@ -1979,6 +1994,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "fastapi", specifier = ">=0.129.0" },
+    { name = "fastapi-limiter", specifier = ">=0.2.0" },
     { name = "fastembed", specifier = ">=0.7.4" },
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "langchain", specifier = ">=1.2.10" },
@@ -1995,6 +2011,7 @@ requires-dist = [
     { name = "pypdf", specifier = ">=6.7.1" },
     { name = "python-dotenv", specifier = ">=1.2.1" },
     { name = "qdrant-client", specifier = ">=1.16.2" },
+    { name = "redis", specifier = ">=7.2.0" },
     { name = "sentence-transformers", specifier = ">=5.2.3" },
     { name = "supabase", specifier = ">=2.28.0" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.41.0" },
@@ -2240,6 +2257,15 @@ wheels = [
 ]
 
 [[package]]
+name = "pyrate-limiter"
+version = "4.0.2"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/03/98/2b3dc1ba6bdf2efaeaa3e102124cbd2636a4ccec241ffeb8a1de207f5cd4/pyrate_limiter-4.0.2.tar.gz", hash = "sha256:b678841e2215f114ef6f98c7093755ca3b466de83cb5a881231fd6e321fa14b5", size = 301304, upload-time = "2026-01-23T09:37:33.612Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/13/b9/80ffe3f2c34d3247186d74b1d08c1fed1e3ad4127ff6a8a5501b7bf16a97/pyrate_limiter-4.0.2-py3-none-any.whl", hash = "sha256:35ec42b9bb9cfabcafab14d0c5c6523f48378c3da2949e534ce3cbdfea71eadd", size = 36439, upload-time = "2026-01-23T09:37:32.097Z" },
+]
+
+[[package]]
 name = "pyroaring"
 version = "1.0.3"
 source = { registry = "https://pypi.org/simple" }
@@ -2388,6 +2414,15 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/d7/0c/a3f34afadd988a99b86b842b334ad1036ae32672e2e5ad89a0b450dc6926/realtime-2.28.0.tar.gz", hash = "sha256:d18cedcebd6a8f22fcd509bc767f639761eb218b7b2b6f14fc4205b6259b50fc", size = 18726, upload-time = "2026-02-10T13:17:02.755Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/3f/04/dd8409d015a872bc1763a87d5d4e82d82c3eac99e9045f2fceab7f38b4b2/realtime-2.28.0-py3-none-any.whl", hash = "sha256:db1bd59bab9b1fcc9f9d3b1a073bed35bf4994d720e6751f10031a58d57a3836", size = 22375, upload-time = "2026-02-10T13:17:01.412Z" },
+]
+
+[[package]]
+name = "redis"
+version = "7.2.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/9f/32/6fac13a11e73e1bc67a2ae821a72bfe4c2d8c4c48f0267e4a952be0f1bae/redis-7.2.0.tar.gz", hash = "sha256:4dd5bf4bd4ae80510267f14185a15cba2a38666b941aff68cccf0256b51c1f26", size = 4901247, upload-time = "2026-02-16T17:16:22.797Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/86/cf/f6180b67f99688d83e15c84c5beda831d1d341e95872d224f87ccafafe61/redis-7.2.0-py3-none-any.whl", hash = "sha256:01f591f8598e483f1842d429e8ae3a820804566f1c73dca1b80e23af9fba0497", size = 394898, upload-time = "2026-02-16T17:16:20.693Z" },
 ]
 
 [[package]]

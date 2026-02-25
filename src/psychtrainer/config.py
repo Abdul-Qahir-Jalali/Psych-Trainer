@@ -61,6 +61,9 @@ class Settings(BaseSettings):
     supabase_url: str = ""
     supabase_anon_key: str = ""
 
+    # ── Rate Limiting ────────────────────────────────────
+    redis_uri: str = ""
+
     # ── RAG ──────────────────────────────────────────────
     chunk_size: int = 500
     chunk_overlap: int = 80
