@@ -1,0 +1,53 @@
+from typing import AsyncGenerator
+import pytest
+from httpx import AsyncClient
+import uuid
+
+# We need to set up environment variables BEFORE importing the app
+import os
+os.environ["SUPABASE_URL"] = "http://fake-supabase.com"
+os.environ["SUPABASE_ANON_KEY"] = "fake-key"
+os.environ["SUPABASE_SERVICE_ROLE_KEY"] = "fake-service-key"
+os.environ["GROQ_API_KEY"] = "fake-groq-key"
+os.environ["REDIS_URI"] = "redis://fake-redis.com:6379"
+
+# Now we can safely import the FastAPI app
+from psychtrainer.service.api import app, get_current_user
+
+# --- Mock Authentication ---
+async def override_get_current_user():
+    """Bypasses Supabase JWT validation during Pytest runs."""
+    return "test_user_001"
+
+app.dependency_overrides[get_current_user] = override_get_current_user
+
+
+@pytest.fixture
+async def async_client() -> AsyncGenerator[AsyncClient, None]:
+    """Provides a mocked async HTTP client to securely test FastAPI endpoints."""
+    async with AsyncClient(app=app, base_url="http://testserver") as client:
+        yield client
+
+@pytest.fixture
+def mock_redis(mocker):
+    """Mocks the Upstash Redis rate limiter to prevent connection failures in CI."""
+    mocker.patch("fastapi_limiter.FastAPILimiter.init", return_value=None)
+    mock_pool = mocker.patch("redis.asyncio.ConnectionPool.from_url")
+    return mock_pool
+
+@pytest.fixture
+def mock_litellm(mocker):
+    """
+    Critically important fixture: intercepts all litellm.completion calls
+    so that tests NEVER spend actual Groq API tokens.
+    """
+    class MockMessage:
+        content = "This is a securely mocked response from the LLM."
+        
+    class MockChoice:
+        message = MockMessage()
+        
+    class MockResponse:
+        choices = [MockChoice()]
+
+    return mocker.patch("litellm.completion", return_value=MockResponse())

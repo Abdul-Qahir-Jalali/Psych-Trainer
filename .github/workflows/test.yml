@@ -1,0 +1,39 @@
+name: Enterprise CI/CD Pipeline
+
+on:
+  push:
+    branches: ["developer", "main"]
+  pull_request:
+    branches: ["developer", "main"]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    # We set dummy environment variables so the app boots successfully
+    # before pytest intercepts the internal networking.
+    env:
+      SUPABASE_URL: "http://fake-supabase"
+      SUPABASE_ANON_KEY: "fake-key"
+      SUPABASE_SERVICE_ROLE_KEY: "fake-service-key"
+      GROQ_API_KEY: "fake-groq"
+      REDIS_URI: "redis://fake-redis"
+
+    steps:
+      - name: Checkout Code Repository
+        uses: actions/checkout@v4
+
+      - name: Install `uv` Dependency Manager
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          version: "latest"
+
+      - name: Set up Python 3.12
+        run: uv python install 3.12
+
+      - name: Sync Virtual Environment
+        run: uv sync --dev
+
+      - name: Execute Strict Pytest Suite Verification
+        run: uv run pytest tests/ -v
