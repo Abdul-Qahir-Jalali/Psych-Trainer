@@ -1,0 +1,26 @@
+# Ignore Node/Python cache files
+node_modules/
+__pycache__/
+*.pyc
+.pytest_cache/
+.coverage
+
+# Ignore Python virtual environments
+.venv/
+env/
+venv/
+.env
+
+# Ignore React Native Build outputs
+frontend-react/dist/
+
+# Ignore Git
+.git/
+.github/
+
+# Ignore local AI state
+.cursor/
+.gemini/
+brain/
+*sqlite*
+*db*

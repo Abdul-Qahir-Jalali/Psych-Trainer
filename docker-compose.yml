@@ -1,0 +1,45 @@
+services:
+  web:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      # Mount the main app code if we wanted hot-reloading in docker (optional)
+      #- ./src:/app/src
+      # Mount SQLite folder to ensure checkpoints survive container restarts IF not using Postgres
+      - ./state:/app/state
+    environment:
+      - HOST=0.0.0.0
+      - REDIS_URI=redis://redis:6379
+      # You should pass your actual API keys via an `.env` file, e.g.:
+      # - SUPABASE_URL=${SUPABASE_URL}
+      # - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
+      # - GROQ_API_KEY=${GROQ_API_KEY}
+    env_file:
+      - .env
+    depends_on:
+      - redis
+      - postgres
+
+  redis:
+    image: redis:7.2-alpine
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_USER=psych_admin
+      - POSTGRES_PASSWORD=psych_password
+      - POSTGRES_DB=psych_checkpoints
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+
+volumes:
+  redis_data:
+  pg_data:
