@@ -8,7 +8,7 @@ export function AuthScreen() {
     const [errorMsg, setErrorMsg] = useState('');
     const [successMsg, setSuccessMsg] = useState('');
 
-    const handleLogin = async (e) => {
+    const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
         setErrorMsg('');
         if (!email || !password) return;
@@ -22,7 +22,7 @@ export function AuthScreen() {
         }
     };
 
-    const handleSignup = async (e) => {
+    const handleSignup = async (e: React.FormEvent) => {
         e.preventDefault();
         setErrorMsg('');
         setSuccessMsg('');

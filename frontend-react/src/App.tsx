@@ -64,7 +64,7 @@ function App() {
         }
     };
 
-    const loadSession = async (id) => {
+    const loadSession = async (id: string) => {
         if (!id) return;
         try {
             const res = await fetch(`${API_BASE}/session/${id}`, { headers: getHeaders() });
@@ -118,7 +118,7 @@ function App() {
         }
     };
 
-    const handleSendMessage = async (text) => {
+    const handleSendMessage = async (text: string) => {
         // If no session, start one first on the fly
         let activeSessionId = currentSessionId;
         if (!activeSessionId) {

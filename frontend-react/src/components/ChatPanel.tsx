@@ -1,23 +1,34 @@
 import { useState, useRef, useEffect } from 'react';
-import { Send, LogOut } from 'lucide-react';
+import { Send } from 'lucide-react';
+
+export interface ChatMessage {
+    role: string;
+    content: string;
+}
+
+interface ChatPanelProps {
+    messages: ChatMessage[];
+    isWaiting: boolean;
+    currentStreamText: string;
+    onSendMessage: (text: string) => void;
+}
 
 export function ChatPanel({ 
     messages, 
     isWaiting, 
     currentStreamText, 
-    onSendMessage,
-    onLogout
-}) {
+    onSendMessage
+}: ChatPanelProps) {
     const [inputText, setInputText] = useState('');
-    const textareaRef = useRef(null);
-    const messagesEndRef = useRef(null);
+    const textareaRef = useRef<HTMLTextAreaElement>(null);
+    const messagesEndRef = useRef<HTMLDivElement>(null);
 
     // Auto-scroll to bottom of chat
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [messages, currentStreamText]);
 
-    const handleInput = (e) => {
+    const handleInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
         setInputText(e.target.value);
         if (textareaRef.current) {
             textareaRef.current.style.height = 'auto';
@@ -34,7 +45,7 @@ export function ChatPanel({
         }
     };
 
-    const handleKeyDown = (e) => {
+    const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
             handleSend();
@@ -117,6 +128,7 @@ export function ChatPanel({
                 />
                 <button 
                     className="btn-send"
+                    title="Send Message"
                     onClick={handleSend}
                     disabled={!inputText.trim() || isWaiting}
                 >

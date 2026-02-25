@@ -1,10 +1,27 @@
+export interface GradeReport {
+    letter_grade: string;
+    numeric_score: number;
+    diagnostic_accuracy: string;
+    rapport_and_empathy: string;
+    interview_flow_and_risk: string;
+    constructive_feedback: string;
+}
+
+interface EvaluationPanelProps {
+    phase: string;
+    turnCount: number;
+    notes: string[];
+    gradeReport: GradeReport | null;
+    onEndSession: () => void;
+}
+
 export function EvaluationPanel({ 
     phase, 
     turnCount, 
     notes, 
     gradeReport, 
     onEndSession 
-}) {
+}: EvaluationPanelProps) {
     return (
         <section className="eval-panel">
             <div className="eval-header">
