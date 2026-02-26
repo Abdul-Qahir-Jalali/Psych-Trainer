@@ -21,17 +21,26 @@ async def override_get_current_user():
 
 app.dependency_overrides[get_current_user] = override_get_current_user
 
+# --- Mock FastAPI App State (Bypassing Lifespan) ---
+class MockWorkflow:
+    def update_state(self, config, state):
+        pass
+
+app.state.few_shot_examples = "Mocked guidelines."
+app.state.workflow = MockWorkflow()
+
 
 @pytest.fixture
 async def async_client() -> AsyncGenerator[AsyncClient, None]:
     """Provides a mocked async HTTP client to securely test FastAPI endpoints."""
-    async with AsyncClient(app=app, base_url="http://testserver") as client:
+    from httpx import ASGITransport
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://testserver") as client:
         yield client
 
 @pytest.fixture
 def mock_redis(mocker):
     """Mocks the Upstash Redis rate limiter to prevent connection failures in CI."""
-    mocker.patch("fastapi_limiter.FastAPILimiter.init", return_value=None)
     mock_pool = mocker.patch("redis.asyncio.ConnectionPool.from_url")
     return mock_pool
 

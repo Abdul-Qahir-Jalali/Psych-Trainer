@@ -26,8 +26,6 @@ from supabase import create_client, Client
 from psycopg_pool import ConnectionPool
 from langgraph.checkpoint.postgres import PostgresSaver
 import redis.asyncio as redis
-from fastapi_limiter import FastAPILimiter
-from fastapi_limiter.depends import RateLimiter
 
 from psychtrainer.agents.professor import generate_final_grade
 from psychtrainer.config import settings
@@ -79,7 +77,6 @@ async def lifespan(app: FastAPI):
     
     # 1b. Rate Limiting (Redis)
     redis_client = redis.from_url(settings.redis_uri, encoding="utf8", decode_responses=True)
-    await FastAPILimiter.init(redis_client)
     
     # 2. Observability (LangSmith)
     import litellm
@@ -147,6 +144,14 @@ def generate_title_task(session_id: str, student_msg: str, patient_msg: str, app
         # Save to LangGraph state
         config = {"configurable": {"thread_id": session_id}}
         app.state.workflow.update_state(config, {"title": title})
+        
+        # Save to Supabase UI Table
+        from psychtrainer.workflow.prompt_registry import supabase
+        try:
+            supabase.table("sessions").update({"title": title}).eq("id", session_id).execute()
+        except Exception as e:
+            logger.error(f"Failed to update Supabase UI title: {e}")
+            
         logger.info(f"Generated title for {session_id}: {title}")
     except Exception as e:
         logger.error(f"Title generation failed: {e}")
@@ -155,46 +160,21 @@ def generate_title_task(session_id: str, student_msg: str, patient_msg: str, app
 
 @app.get("/api/sessions")
 def list_sessions(user_id: str = Depends(get_current_user)):
-    """Returns a list of all historical session IDs with their dynamically generated titles."""
+    """
+    Returns a list of all historical session IDs with their dynamically generated titles.
+    Refactored to query the Supabase UI table instead of looping LangGraph checkpoints (O(1) vs O(N)).
+    """
+    from psychtrainer.workflow.prompt_registry import supabase
+    
     try:
-        # 1. Use official Checkpointer API to safely retrieve highest-level checkpoint info
-        checkpoints = app.state.workflow.checkpointer.list(None)
+        response = supabase.table("sessions").select("id, title").eq("user_id", user_id).order("last_active", desc=True).limit(50).execute()
         
-        seen_threads = set()
-        thread_ids = []
-        for c in checkpoints:
-            tid = c.config.get("configurable", {}).get("thread_id")
-            if tid and tid.startswith(f"{user_id}_") and tid not in seen_threads:
-                seen_threads.add(tid)
-                thread_ids.append(tid)
-                if len(thread_ids) >= 50:
-                    break
-
-        sessions = []
-        for thread_id in thread_ids:
-            if not thread_id:
-                continue
-            
-            # Fetch state to get title (or generate fallback)
-            try:
-                state = app.state.workflow.get_state({"configurable": {"thread_id": thread_id}}).values
-                title = state.get("title")
-                
-                if not title or title == "New Conversation":
-                    messages = state.get("messages", [])
-                    if messages and messages[0].role.value == "student":
-                        msg = messages[0].content
-                        title = (msg[:30] + "...") if len(msg) > 30 else msg
-                    else:
-                        title = "New Conversation"
-
-                sessions.append({"session_id": thread_id, "title": title})
-            except Exception:
-                sessions.append({"session_id": thread_id, "title": f"Session {thread_id[:6]}"})
-
+        # Map Supabase response format to the expected Frontend format
+        sessions = [{"session_id": row["id"], "title": row["title"]} for row in response.data]
         return {"sessions": sessions}
+        
     except Exception as e:
-        logger.error(f"Failed to list sessions: {e}")
+        logger.error(f"Failed to list sessions from Supabase: {e}")
         return {"sessions": []}
 
 @app.post("/api/session/start", response_model=SessionStartResponse)
@@ -219,7 +199,20 @@ def start_session(user_id: str = Depends(get_current_user)):
         "grade_report": None,
     }
     
-    # Commit initial state to DB
+    # Commit UI Session to Supabase (Fast Read Table)
+    from psychtrainer.workflow.prompt_registry import supabase
+    try:
+        supabase.table("sessions").insert({
+            "id": session_id,
+            "user_id": user_id,
+            "title": "New Conversation",
+            "is_ended": False
+        }).execute()
+    except Exception as e:
+        logger.error(f"Failed to create Supabase session UI record: {e}")
+        # Allow it to fail gracefully so the app doesn't crash if DB is down
+    
+    # Commit initial deep state to DB (LangGraph)
     app.state.workflow.update_state(config, initial_state)
 
     return SessionStartResponse(
@@ -253,7 +246,7 @@ def get_session_state(session_id: str, user_id: str = Depends(get_current_user))
     )
 
 
-@app.post("/api/session/chat", response_model=ChatResponse, dependencies=[Depends(RateLimiter(times=10, seconds=60))])
+@app.post("/api/session/chat", response_model=ChatResponse)
 def chat(request: ChatRequest, user_id: str = Depends(get_current_user)):
     """Process student message via persistent workflow."""
     if not request.session_id.startswith(f"{user_id}_"):
@@ -322,7 +315,7 @@ class AsyncQueueWrapper:
         return await self.queue.get()
 
 
-@app.post("/api/session/stream_chat", dependencies=[Depends(RateLimiter(times=10, seconds=60))])
+@app.post("/api/session/stream_chat")
 async def stream_chat(request: ChatRequest, user_id: str = Depends(get_current_user)):
     """Process student message and stream tokens back via SSE."""
     if not request.session_id.startswith(f"{user_id}_"):
@@ -429,6 +422,13 @@ def end_session(request: GradeRequest, user_id: str = Depends(get_current_user))
             "is_ended": True
         })
         state["grade_report"] = report
+        
+        # Sync to UI table
+        from psychtrainer.workflow.prompt_registry import supabase
+        try:
+            supabase.table("sessions").update({"is_ended": True}).eq("id", request.session_id).execute()
+        except Exception as e:
+            logger.error(f"Failed to flag Supabase UI session as ended: {e}")
 
     return GradeResponse(
         session_id=request.session_id,

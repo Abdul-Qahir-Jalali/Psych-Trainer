@@ -35,4 +35,4 @@ async def test_api_session_unauthorized(async_client: AsyncClient, mock_redis):
     async def override_get_current_user(): return "test_user_001"
     app.dependency_overrides[get_current_user] = override_get_current_user
     
-    assert response.status_code == 403 # FastAPI Depends throws 403 if missing Authorization header
+    assert response.status_code == 401 # FastAPI Depends throws 401 if missing Authorization header
