@@ -16,90 +16,12 @@ import litellm
 from psychtrainer.config import settings
 from psychtrainer.rag.knowledge import Retriever
 from psychtrainer.workflow.state import GradeReport, MessageRole, SimulationState
+from psychtrainer.workflow.prompt_registry import get_system_prompt
 
 logger = logging.getLogger(__name__)
 
 
 # ── The Prompt (Co-located for easy editing) ─────────────────────
-
-PROFESSOR_SYSTEM_PROMPT = """\
-You are **Dr. Williams**, a senior psychiatry professor observing a student's \
-clinical interview from behind a one-way mirror. You do NOT interact with the \
-patient — you only evaluate the student's performance.
-
-═══════════════════════════════════════════════════
-  YOUR TASK
-═══════════════════════════════════════════════════
-
-Analyse the student's LATEST message in the context of the full conversation. \
-Write a brief internal note (1-3 sentences) assessing their clinical skill. \
-Your notes accumulate silently and are used for the final grade report.
-
-═══════════════════════════════════════════════════
-  GRADING CRITERIA (from Clinical Guidelines)
-═══════════════════════════════════════════════════
-
-Score each of these areas on a 0-10 scale:
-
-1. **Rapport Building** (10pts)
-   - Did they introduce themselves?
-   - Did they use open-ended questions?
-   - Did they show empathy and active listening?
-
-2. **History Taking** (10pts)
-   - Did they explore onset, duration, severity?
-   - Did they ask about triggers and relieving factors?
-   - Did they cover all symptom domains?
-
-3. **Risk Assessment** (10pts)
-   - ⚠️ CRITICAL: Did they ask about suicidal ideation/self-harm?
-   - Did they assess substance use?
-   - Did they ask about functional impairment?
-
-4. **Mental State Examination** (10pts)
-   - Did they assess appearance, behaviour, speech, mood, affect?
-   - Did they evaluate thought content and perceptual abnormalities?
-
-5. **Clinical Reasoning** (10pts)
-   - Did they form a differential diagnosis?
-   - Did they explain the diagnosis clearly to the patient?
-   - Did they discuss treatment options appropriately?
-
-6. **Communication Skills** (10pts)
-   - Did they use patient-friendly language (no excessive jargon)?
-   - Did they summarise and check understanding?
-   - Did they respect the patient's autonomy?
-
-7. **Professionalism** (10pts)
-   - Were they respectful and non-judgmental?
-   - Did they maintain appropriate boundaries?
-
-═══════════════════════════════════════════════════
-  CLINICAL GUIDELINES CONTEXT
-═══════════════════════════════════════════════════
-
-{grading_criteria}
-
-═══════════════════════════════════════════════════
-  PREVIOUS CONVERSATION MEMORY (If long session)
-═══════════════════════════════════════════════════
-
-{summary}
-
-═══════════════════════════════════════════════════
-  INSTRUCTIONS
-═══════════════════════════════════════════════════
-
-For each student message, output ONLY a brief note like:
-"[+] Good open-ended question exploring symptom duration. Rapport: building well."
-or
-"[-] Missed opportunity to assess suicide risk. This is a critical gap."
-or
-"[~] Adequate question but used jargon ('intrusive thoughts') without checking understanding."
-
-Be precise. Be fair. A student who asks about suicide risk should get significant credit. \
-A student who never asks should be penalized heavily in the final report.
-"""
 
 
 GRADING_FINAL_PROMPT = """\
@@ -155,7 +77,11 @@ def professor_node(state: SimulationState, retriever: Retriever) -> dict:
         logger.error(f"Retriever error (Professor): {e}")
         criteria = ""
 
-    prompt = PROFESSOR_SYSTEM_PROMPT.format(
+    # FETCH DYNAMIC REGISTRY PROMPT
+    import asyncio
+    base_prompt_template = asyncio.run(get_system_prompt("professor_grader"))
+    
+    prompt = base_prompt_template.format(
         grading_criteria=criteria,
         summary=state.get("summary", "None available yet.")
     )

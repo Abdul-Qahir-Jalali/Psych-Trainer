@@ -23,32 +23,7 @@ from psychtrainer.workflow.state import Phase, SimulationState
 logger = logging.getLogger(__name__)
 
 
-# ── Router Logic & Prompt ────────────────────────────────────────
-
-ROUTER_PROMPT = """\
-You are a clinical simulation phase router. Based on the conversation so far, \
-determine the CURRENT phase of the interview.
-
-Phases:
-- "introduction" — Student is greeting, building rapport, explaining the purpose.
-- "examination" — Student is asking clinical questions, exploring symptoms, history.
-- "diagnosis" — Student is explaining their assessment, discussing treatment.
-- "debrief" — Session is over (student has explicitly ended or >20 turns).
-
-Conversation so far (last 5 messages):
-{recent_messages}
-
-Current phase: {current_phase}
-Turn count: {turn_count}
-
-Rules:
-- Move to "examination" after the student asks their first clinical question.
-- Move to "diagnosis" when the student starts explaining what they think is wrong.
-- Move to "debrief" only if the student explicitly ends OR turn count > 20.
-- NEVER move backwards in phases.
-
-Output ONLY one word: introduction, examination, diagnosis, or debrief.
-"""
+from psychtrainer.workflow.prompt_registry import get_system_prompt
 
 
 def _router_node(state: SimulationState) -> dict:
@@ -66,11 +41,13 @@ def _router_node(state: SimulationState) -> dict:
         return {"phase": current_phase}
 
     # Prepare prompt
-    recent_text = "\n".join(
+    recent_messages = "\n".join(
         f"{m.role.value.upper()}: {m.content}" for m in messages[-6:]
     )
-    prompt = ROUTER_PROMPT.format(
-        recent_messages=recent_text,
+    # Execute LLM to determine next phase using the DYNAMIC registry
+    router_prompt_template = asyncio.run(get_system_prompt("phase_router"))
+    prompt = router_prompt_template.format(
+        recent_messages=recent_messages,
         current_phase=current_phase.value,
         turn_count=turn_count,
     )

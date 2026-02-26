@@ -51,3 +51,23 @@ def mock_litellm(mocker):
         choices = [MockChoice()]
 
     return mocker.patch("litellm.completion", return_value=MockResponse())
+
+@pytest.fixture(autouse=True)
+def mock_prompt_registry(mocker):
+    """
+    Critically important fixture: Intercepts all calls to the Supabase Prompt Registry
+    during testing to guarantee zero database hits and zero Redis hits.
+    """
+    async def mock_get_system_prompt(role: str, ignore_cache: bool = False):
+        if role == "patient_persona":
+            return "You are a simulated patient for testing."
+        elif role == "professor_grader":
+            return "You are a simulated professor for testing."
+        elif role == "phase_router":
+            return "Rules: Output ONLY one word: examination."
+        return "Generic prompt."
+
+    return mocker.patch(
+        "psychtrainer.workflow.prompt_registry.get_system_prompt",
+        side_effect=mock_get_system_prompt
+    )
