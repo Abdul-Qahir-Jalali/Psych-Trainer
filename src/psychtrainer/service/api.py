@@ -23,8 +23,8 @@ from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from supabase import create_client, Client
-from psycopg_pool import ConnectionPool
-from langgraph.checkpoint.postgres import PostgresSaver
+from psycopg_pool import AsyncConnectionPool
+from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 import redis.asyncio as redis
 
 from psychtrainer.agents.professor import generate_final_grade
@@ -70,10 +70,10 @@ async def lifespan(app: FastAPI):
     logger.info("Initializing PsychTrainer...")
     
     # 1. Database Connection
-    # Uses psycopg connection pool for concurrent connections
-    pool = ConnectionPool(conninfo=settings.postgres_uri)
-    checkpointer = PostgresSaver(pool)
-    checkpointer.setup() # Automatically creates all LangGraph tables if they don't exist
+    # Uses psycopg async connection pool for high-concurrency connections
+    pool = AsyncConnectionPool(conninfo=settings.postgres_uri)
+    checkpointer = AsyncPostgresSaver(pool)
+    await checkpointer.asetup() # Automatically creates all LangGraph tables securely
     
     # 1b. Rate Limiting (Redis)
     redis_client = redis.from_url(settings.redis_uri, encoding="utf8", decode_responses=True)
@@ -103,7 +103,7 @@ async def lifespan(app: FastAPI):
     yield
     
     logger.info("🛑 Shutting down & closing DB...")
-    pool.close()
+    await pool.close()
     await redis_client.close()
 
 
@@ -178,8 +178,8 @@ def list_sessions(user_id: str = Depends(get_current_user)):
         return {"sessions": []}
 
 @app.post("/api/session/start", response_model=SessionStartResponse)
-def start_session(user_id: str = Depends(get_current_user)):
-    """Begin a new session. Initializes state in DB."""
+async def start_session(user_id: str = Depends(get_current_user)):
+    """Begin a new session asynchronously. Initializes state in DB."""
     session_id = f"{user_id}_{uuid.uuid4().hex[:12]}"
     config = {"configurable": {"thread_id": session_id}}
     
@@ -213,7 +213,7 @@ def start_session(user_id: str = Depends(get_current_user)):
         # Allow it to fail gracefully so the app doesn't crash if DB is down
     
     # Commit initial deep state to DB (LangGraph)
-    app.state.workflow.update_state(config, initial_state)
+    await app.state.workflow.aupdate_state(config, initial_state)
 
     return SessionStartResponse(
         session_id=session_id,
@@ -223,14 +223,15 @@ def start_session(user_id: str = Depends(get_current_user)):
 
 
 @app.get("/api/session/{session_id}", response_model=SessionStateResponse)
-def get_session_state(session_id: str, user_id: str = Depends(get_current_user)):
-    """Retrieve full session state for resumption."""
+async def get_session_state(session_id: str, user_id: str = Depends(get_current_user)):
+    """Retrieve full session state asynchronously for resumption."""
     if not session_id.startswith(f"{user_id}_"):
         raise HTTPException(status_code=403, detail="Unauthorized access to session")
     config = {"configurable": {"thread_id": session_id}}
     
     try:
-        current_state = app.state.workflow.get_state(config).values
+        snapshot = await app.state.workflow.aget_state(config)
+        current_state = snapshot.values
         if not current_state:
              raise HTTPException(404, "Session not found")
     except Exception:
@@ -247,15 +248,16 @@ def get_session_state(session_id: str, user_id: str = Depends(get_current_user))
 
 
 @app.post("/api/session/chat", response_model=ChatResponse)
-def chat(request: ChatRequest, user_id: str = Depends(get_current_user)):
-    """Process student message via persistent workflow."""
+async def chat(request: ChatRequest, user_id: str = Depends(get_current_user)):
+    """Process student message via persistent workflow natively (async)."""
     if not request.session_id.startswith(f"{user_id}_"):
         raise HTTPException(status_code=403, detail="Unauthorized access to session")
     config = {"configurable": {"thread_id": request.session_id}}
     
     # Check if session exists (by trying to get state)
     try:
-        current_state = app.state.workflow.get_state(config).values
+        snapshot = await app.state.workflow.aget_state(config)
+        current_state = snapshot.values
         if not current_state:
              raise HTTPException(404, "Session not found")
     except Exception:
@@ -278,7 +280,7 @@ def chat(request: ChatRequest, user_id: str = Depends(get_current_user)):
         "turn_count": current_state["turn_count"] + 1
     }
     
-    result = app.state.workflow.invoke(input_update, config)
+    result = await app.state.workflow.ainvoke(input_update, config)
     
     # 3. Extract Response
     patient_reply = ""
@@ -291,7 +293,7 @@ def chat(request: ChatRequest, user_id: str = Depends(get_current_user)):
 
     # 4. Async Title Generation on turn 1
     if result["turn_count"] == 1:
-        threading.Thread(target=generate_title_task, args=(request.session_id, request.message, patient_reply, app)).start()
+        asyncio.create_task(generate_title_task(request.session_id, request.message, patient_reply, app))
 
     return ChatResponse(
         session_id=request.session_id,
@@ -302,36 +304,22 @@ def chat(request: ChatRequest, user_id: str = Depends(get_current_user)):
     )
 
 
-class AsyncQueueWrapper:
-    """Bridges synchronous producer (LangGraph thread) to pure async FastAPI generator."""
-    def __init__(self):
-        self.loop = asyncio.get_running_loop()
-        self.queue = asyncio.Queue()
-        
-    def put(self, item):
-        self.loop.call_soon_threadsafe(self.queue.put_nowait, item)
-        
-    async def get(self):
-        return await self.queue.get()
-
-
 @app.post("/api/session/stream_chat")
 async def stream_chat(request: ChatRequest, user_id: str = Depends(get_current_user)):
-    """Process student message and stream tokens back via SSE."""
+    """Process student message and stream tokens back natively via SSE (No Threading)."""
     if not request.session_id.startswith(f"{user_id}_"):
         raise HTTPException(status_code=403, detail="Unauthorized access to session")
     session_id = request.session_id
-    stream_queue = AsyncQueueWrapper()
     config = {
         "configurable": {
             "thread_id": session_id,
-            "stream_queue": stream_queue
         }
     }
     
     # 1. State setup and validation
     try:
-        current_state = app.state.workflow.get_state(config).values
+        snapshot = await app.state.workflow.aget_state(config)
+        current_state = snapshot.values
         if not current_state:
              raise HTTPException(404, "Session not found")
     except Exception:
@@ -350,64 +338,56 @@ async def stream_chat(request: ChatRequest, user_id: str = Depends(get_current_u
         "turn_count": current_state["turn_count"] + 1
     }
 
-    # 2. Generator for SSE
+    # 2. Native Async Generator for SSE
     async def event_generator():
-        def run_graph():
-            try:
-                result = app.state.workflow.invoke(input_update, config)
-                stream_queue.put({"__done__": True, "result": result})
-            except Exception as e:
-                logger.error(f"Graph stream error: {e}")
-                stream_queue.put({"__error__": str(e)})
+        try:
+            async for event in app.state.workflow.astream_events(input_update, config, version="v2"):
+                # Stream the patient's LLM tokens as they arrive
+                if event["event"] == "on_chat_model_stream" and event["metadata"].get("langgraph_node") == "patient":
+                    chunk = event["data"]["chunk"]
+                    if chunk.content:
+                        yield f"data: {json.dumps({'token': chunk.content})}\n\n"
+                        
+            # Graph finished executing, fetch the final state snapshot
+            final_snapshot = await app.state.workflow.aget_state(config)
+            result = final_snapshot.values
+            
+            # 3. Async Title Generation on turn 1
+            if result["turn_count"] == 1:
+                patient_reply = ""
+                for m in reversed(result["messages"]):
+                    if m.role == MessageRole.PATIENT:
+                        patient_reply = m.content
+                        break
+                # Fire and forget the background task
+                asyncio.create_task(generate_title_task(session_id, request.message, patient_reply, app))
 
-        loop = asyncio.get_running_loop()
-        loop.run_in_executor(None, run_graph)
+            note = result.get("professor_notes", [])[-1] if result.get("professor_notes") else None
+            phase_val = result["phase"].value if hasattr(result["phase"], "value") else result["phase"]
+            final_data = {
+                "phase": phase_val,
+                "turn_count": result["turn_count"],
+                "professor_note": note,
+            }
+            yield f"event: done\ndata: {json.dumps(final_data)}\n\n"
 
-        while True:
-            item = await stream_queue.get()
-
-            if isinstance(item, dict):
-                if "__done__" in item:
-                    result = item["result"]
-                    
-                    # 3. Async Title Generation on turn 1
-                    if result["turn_count"] == 1:
-                        patient_reply = ""
-                        for m in reversed(result["messages"]):
-                            if m.role == MessageRole.PATIENT:
-                                patient_reply = m.content
-                                break
-                        loop = asyncio.get_running_loop()
-                        loop.run_in_executor(None, generate_title_task, session_id, request.message, patient_reply, app)
-
-                    note = result.get("professor_notes", [])[-1] if result.get("professor_notes") else None
-                    phase_val = result["phase"].value if hasattr(result["phase"], "value") else result["phase"]
-                    final_data = {
-                        "phase": phase_val,
-                        "turn_count": result["turn_count"],
-                        "professor_note": note,
-                    }
-                    yield f"event: done\ndata: {json.dumps(final_data)}\n\n"
-                    break
-                elif "__error__" in item:
-                    yield f"event: error\ndata: {json.dumps({'error': item['__error__']})}\n\n"
-                    break
-            else:
-                yield f"data: {json.dumps({'token': item})}\n\n"
+        except Exception as e:
+            logger.error(f"Graph stream error: {e}")
+            yield f"event: error\ndata: {json.dumps({'error': str(e)})}\n\n"
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
 
 
 @app.post("/api/session/end", response_model=GradeResponse)
-def end_session(request: GradeRequest, user_id: str = Depends(get_current_user)):
-    """End session and persist grade."""
+async def end_session(request: GradeRequest, user_id: str = Depends(get_current_user)):
+    """End session asynchronously and persist grade."""
     if not request.session_id.startswith(f"{user_id}_"):
         raise HTTPException(status_code=403, detail="Unauthorized access to session")
     config = {"configurable": {"thread_id": request.session_id}}
     
     try:
         # Get state snapshot
-        snapshot = app.state.workflow.get_state(config)
+        snapshot = await app.state.workflow.aget_state(config)
         state = snapshot.values
         if not state:
              raise HTTPException(404, "Session not found")
@@ -415,9 +395,9 @@ def end_session(request: GradeRequest, user_id: str = Depends(get_current_user))
         raise HTTPException(404, "Session not found")
 
     if not state.get("grade_report"):
-        report = generate_final_grade(state)
+        report = await generate_final_grade(state)
         # Update state with report
-        app.state.workflow.update_state(config, {
+        await app.state.workflow.aupdate_state(config, {
             "grade_report": report,
             "is_ended": True
         })

@@ -26,8 +26,8 @@ logger = logging.getLogger(__name__)
 from psychtrainer.workflow.prompt_registry import get_system_prompt
 
 
-def _router_node(state: SimulationState) -> dict:
-    """Decides the next phase based on conversation history."""
+async def _router_node(state: SimulationState) -> dict:
+    """Decides the next phase based on conversation history (asynchronously)."""
     messages = state["messages"]
     current_phase = state["phase"]
     turn_count = state["turn_count"]
@@ -44,16 +44,16 @@ def _router_node(state: SimulationState) -> dict:
     recent_messages = "\n".join(
         f"{m.role.value.upper()}: {m.content}" for m in messages[-6:]
     )
-    # Execute LLM to determine next phase using the DYNAMIC registry
-    router_prompt_template = asyncio.run(get_system_prompt("phase_router"))
-    prompt = router_prompt_template.format(
+    # Execute LLM to determine next phase using the DYNAMIC registry asynchronously
+    base_prompt_template = await get_system_prompt("phase_router")
+    prompt = base_prompt_template.format(
         recent_messages=recent_messages,
         current_phase=current_phase.value,
         turn_count=turn_count,
     )
 
     try:
-        response = litellm.completion(
+        response = await litellm.acompletion(
             model=settings.llm_model,
             messages=[{"role": "user", "content": prompt}],
             temperature=0.0,

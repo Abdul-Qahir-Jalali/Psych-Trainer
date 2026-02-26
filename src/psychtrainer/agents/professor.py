@@ -59,9 +59,9 @@ Be rigorous but fair. Output ONLY valid JSON, no markdown fences.
 
 # ── The Agent Logic ──────────────────────────────────────────────
 
-def professor_node(state: SimulationState, retriever: Retriever) -> dict:
+async def professor_node(state: SimulationState, retriever: Retriever) -> dict:
     """
-    Evaluates the student's latest message.
+    Evaluates the student's latest message asynchronously.
     """
     if len(state["messages"]) < 2:
         return {}
@@ -77,9 +77,8 @@ def professor_node(state: SimulationState, retriever: Retriever) -> dict:
         logger.error(f"Retriever error (Professor): {e}")
         criteria = ""
 
-    # FETCH DYNAMIC REGISTRY PROMPT
-    import asyncio
-    base_prompt_template = asyncio.run(get_system_prompt("professor_grader"))
+    # FETCH DYNAMIC REGISTRY PROMPT asynchronously
+    base_prompt_template = await get_system_prompt("professor_grader")
     
     prompt = base_prompt_template.format(
         grading_criteria=criteria,
@@ -94,7 +93,7 @@ def professor_node(state: SimulationState, retriever: Retriever) -> dict:
     )
 
     try:
-        response = litellm.completion(
+        response = await litellm.acompletion(
             model=settings.llm_model,
             messages=[{"role": "user", "content": full_prompt}],
             temperature=0.2,
@@ -112,9 +111,9 @@ def professor_node(state: SimulationState, retriever: Retriever) -> dict:
     }
 
 
-def generate_final_grade(state: SimulationState) -> GradeReport:
+async def generate_final_grade(state: SimulationState) -> GradeReport:
     """
-    Compiles all session notes into a final JSON report card.
+    Compiles all session notes asynchronously into a final JSON report card.
     """
     notes = "\n".join(f"- {n}" for n in state.get("professor_notes", []))
     transcript = "\n".join(
@@ -127,7 +126,7 @@ def generate_final_grade(state: SimulationState) -> GradeReport:
     )
 
     try:
-        response = litellm.completion(
+        response = await litellm.acompletion(
             model=settings.llm_model,
             messages=[{"role": "user", "content": prompt}],
             temperature=0.1,

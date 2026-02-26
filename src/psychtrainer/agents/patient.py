@@ -23,12 +23,12 @@ from psychtrainer.workflow.prompt_registry import get_system_prompt
 
 # ── The Agent Logic ──────────────────────────────────────────────
 
-def patient_node(state: SimulationState, config: RunnableConfig, retriever: Retriever) -> dict:
+async def patient_node(state: SimulationState, config: RunnableConfig, retriever: Retriever) -> dict:
     """
-    Executes the Patient's turn.
+    Executes the Patient's turn asynchronously.
     1. Retrieves context (RAG).
     2. Builds prompt with current Phase.
-    3. Calls LLM.
+    3. Calls LLM (Non-blocking).
     """
     student_msg = state["messages"][-1].content
     phase = state["phase"]
@@ -42,10 +42,9 @@ def patient_node(state: SimulationState, config: RunnableConfig, retriever: Retr
         patient_context = ""
         medical_context = ""
 
-
     # 2. Build Prompt
-    # FETCH DYNAMIC REGISTRY PROMPT
-    base_prompt_template = asyncio.run(get_system_prompt("patient_persona"))
+    # FETCH DYNAMIC REGISTRY PROMPT asynchronously
+    base_prompt_template = await get_system_prompt("patient_persona")
     
     system_prompt = base_prompt_template.format(
         patient_context=patient_context,
@@ -64,7 +63,7 @@ def patient_node(state: SimulationState, config: RunnableConfig, retriever: Retr
     stream_queue = config.get("configurable", {}).get("stream_queue")
     
     try:
-        response = litellm.completion(
+        response = await litellm.acompletion(
             model=settings.llm_model,
             messages=messages,
             temperature=0.7,
@@ -73,12 +72,13 @@ def patient_node(state: SimulationState, config: RunnableConfig, retriever: Retr
             stream=bool(stream_queue),
         )
         
+        content = ""
         if stream_queue:
             content_chunks = []
-            for chunk in response:
+            async for chunk in response:
                 delta = chunk.choices[0].delta.content or ""
                 content_chunks.append(delta)
-                stream_queue.put(delta)
+                await stream_queue.put(delta)
             content = "".join(content_chunks).strip()
         else:
             content = response.choices[0].message.content.strip()

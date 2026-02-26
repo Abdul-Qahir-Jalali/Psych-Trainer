@@ -25,6 +25,20 @@ app.dependency_overrides[get_current_user] = override_get_current_user
 class MockWorkflow:
     def update_state(self, config, state):
         pass
+        
+    async def aupdate_state(self, config, state):
+        pass
+        
+    async def aget_state(self, config):
+        class MockSnapshot:
+            pass
+        snapshot = MockSnapshot()
+        snapshot.values = {
+            "turn_count": 0,
+            "session_id": "test_session",
+            "phase": "introduction"
+        }
+        return snapshot
 
 app.state.few_shot_examples = "Mocked guidelines."
 app.state.workflow = MockWorkflow()
