@@ -9,7 +9,8 @@ from __future__ import annotations
 
 import logging
 
-import litellm
+from langchain_community.chat_models import ChatLiteLLM
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_core.runnables import RunnableConfig
 
 from psychtrainer.config import settings
@@ -54,34 +55,24 @@ async def patient_node(state: SimulationState, config: RunnableConfig, retriever
         summary=state.get("summary", "None available yet."),
     )
 
-    messages = [{"role": "system", "content": system_prompt}]
+    lc_messages = [SystemMessage(content=system_prompt)]
     for msg in state["messages"]:
-        role = "assistant" if msg.role == MessageRole.PATIENT else "user"
-        messages.append({"role": role, "content": msg.content})
-
-    # 3. Call LLM
-    stream_queue = config.get("configurable", {}).get("stream_queue")
-    
-    try:
-        response = await litellm.acompletion(
-            model=settings.llm_model,
-            messages=messages,
-            temperature=0.7,
-            max_tokens=150,
-            api_key=settings.groq_api_key,
-            stream=bool(stream_queue),
-        )
-        
-        content = ""
-        if stream_queue:
-            content_chunks = []
-            async for chunk in response:
-                delta = chunk.choices[0].delta.content or ""
-                content_chunks.append(delta)
-                await stream_queue.put(delta)
-            content = "".join(content_chunks).strip()
+        if msg.role == MessageRole.PATIENT:
+            lc_messages.append(AIMessage(content=msg.content))
         else:
-            content = response.choices[0].message.content.strip()
+            lc_messages.append(HumanMessage(content=msg.content))
+
+    llm = ChatLiteLLM(
+        model=settings.llm_model,
+        temperature=0.7,
+        max_tokens=150,
+        api_key=settings.groq_api_key,
+    )
+
+    try:
+        response = await llm.ainvoke(lc_messages, config)
+        content = response.content
+            
             
     except Exception as e:
         logger.error(f"Patient LLM error: {e}")
