@@ -1,7 +1,7 @@
 """
 FastAPI Application — The main entry point.
 
-• Lifespan: Initializes SqliteSaver for session persistence.
+• Lifespan: Initializes AsyncPostgresSaver for session persistence.
 • Routes: Uses `thread_id` to manage state via LangGraph.
 • Store: Replaces in-memory store with permanent SQLite DB.
 """
