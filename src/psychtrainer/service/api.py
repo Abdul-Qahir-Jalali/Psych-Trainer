@@ -210,7 +210,10 @@ async def start_session(user_id: str = Depends(get_current_user)):
         }).execute()
     except Exception as e:
         logger.error(f"Failed to create Supabase session UI record: {e}")
-        # Allow it to fail gracefully so the app doesn't crash if DB is down
+        raise HTTPException(
+            status_code=500, 
+            detail="Failed to initialize session in database. Please try again."
+        )
     
     # Commit initial deep state to DB (LangGraph)
     await app.state.workflow.aupdate_state(config, initial_state)

@@ -76,6 +76,19 @@ def mock_litellm(mocker):
     return mocker.patch("litellm.completion", return_value=MockResponse())
 
 @pytest.fixture(autouse=True)
+def mock_supabase_client(mocker):
+    """
+    Critically important fixture: Intercepts all calls to the global Supabase client
+    so that tests NEVER hit the internet and never throw 500 errors.
+    """
+    mock_client = mocker.MagicMock()
+    mock_client.table.return_value.insert.return_value.execute.return_value = None
+    mock_client.table.return_value.update.return_value.eq.return_value.execute.return_value = None
+    mock_client.table.return_value.select.return_value.eq.return_value.order.return_value.limit.return_value.execute.return_value.data = []
+    
+    return mocker.patch("psychtrainer.workflow.prompt_registry.supabase", mock_client)
+
+@pytest.fixture(autouse=True)
 def mock_prompt_registry(mocker):
     """
     Critically important fixture: Intercepts all calls to the Supabase Prompt Registry
