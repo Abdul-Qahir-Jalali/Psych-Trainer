@@ -40,8 +40,13 @@ class MockWorkflow:
         }
         return snapshot
 
+class MockArqPool:
+    async def enqueue_job(self, *args, **kwargs):
+        pass
+
 app.state.few_shot_examples = "Mocked guidelines."
 app.state.workflow = MockWorkflow()
+app.state.arq_pool = MockArqPool()
 
 
 @pytest.fixture

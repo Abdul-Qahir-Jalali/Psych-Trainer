@@ -26,6 +26,8 @@ from supabase import create_client, Client
 from psycopg_pool import AsyncConnectionPool
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 import redis.asyncio as redis
+from arq import create_pool
+from arq.connections import RedisSettings
 
 from psychtrainer.agents.professor import generate_final_grade
 from psychtrainer.config import settings
@@ -92,19 +94,24 @@ async def lifespan(app: FastAPI):
     examples = load_few_shot_examples()
     workflow = build_workflow(retriever, checkpointer=checkpointer)
     
-    # 3. Store in App State
+    # 4. Store in App State
     app.state.pool = pool
     app.state.checkpointer = checkpointer
     app.state.retriever = retriever
     app.state.few_shot_examples = examples
     app.state.workflow = workflow
     
-    logger.info("✅ System Ready (with Persistence).")
+    # 5. Connect to ARQ Redis Pool (for background worker jobs)
+    arq_pool = await create_pool(RedisSettings.from_dsn(settings.redis_uri))
+    app.state.arq_pool = arq_pool
+    
+    logger.info("✅ System Ready (with Persistence & ARQ).")
     yield
     
     logger.info("🛑 Shutting down & closing DB...")
     await pool.close()
     await redis_client.close()
+    await arq_pool.close()
 
 
 app = FastAPI(title="PsychTrainer", version="3.1.0", lifespan=lifespan)
@@ -121,40 +128,7 @@ app.add_middleware(
 app.include_router(socket_router, prefix="/api")
 
 
-def generate_title_task(session_id: str, student_msg: str, patient_msg: str, app: FastAPI):
-    """Background task to generate a conversational title using the LLM."""
-    try:
-        import litellm
-        from psychtrainer.config import settings
 
-        prompt = (
-            "Summarize the following exchange into a short, professional, 3-5 word title "
-            "for a clinical interview session. DO NOT use quotes. Example: 'OCD Initial Assessment' or 'Sleep Trouble History'.\n\n"
-            f"Student: {student_msg}\nPatient: {patient_msg}"
-        )
-        response = litellm.completion(
-            model=settings.llm_model,
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.3,
-            max_tokens=20,
-            api_key=settings.groq_api_key,
-        )
-        title = response.choices[0].message.content.strip().strip('"').strip("'")
-        
-        # Save to LangGraph state
-        config = {"configurable": {"thread_id": session_id}}
-        app.state.workflow.update_state(config, {"title": title})
-        
-        # Save to Supabase UI Table
-        from psychtrainer.workflow.prompt_registry import supabase
-        try:
-            supabase.table("sessions").update({"title": title}).eq("id", session_id).execute()
-        except Exception as e:
-            logger.error(f"Failed to update Supabase UI title: {e}")
-            
-        logger.info(f"Generated title for {session_id}: {title}")
-    except Exception as e:
-        logger.error(f"Title generation failed: {e}")
 
 # ── REST Endpoints (Sync for ThreadPool execution) ────────────────
 
@@ -251,7 +225,7 @@ async def get_session_state(session_id: str, user_id: str = Depends(get_current_
 
 
 @app.post("/api/session/chat", response_model=ChatResponse)
-async def chat(request: ChatRequest, background_tasks: BackgroundTasks, user_id: str = Depends(get_current_user)):
+async def chat(request: ChatRequest, user_id: str = Depends(get_current_user)):
     """Process student message via persistent workflow natively (async)."""
     if not request.session_id.startswith(f"{user_id}_"):
         raise HTTPException(status_code=403, detail="Unauthorized access to session")
@@ -296,7 +270,8 @@ async def chat(request: ChatRequest, background_tasks: BackgroundTasks, user_id:
 
     # 4. Async Title Generation on turn 1
     if result["turn_count"] == 1:
-        background_tasks.add_task(generate_title_task, request.session_id, request.message, patient_reply, app)
+        # Safely enqueue to ARQ Redis worker
+        await app.state.arq_pool.enqueue_job("generate_title_task", request.session_id, request.message, patient_reply)
 
     return ChatResponse(
         session_id=request.session_id,
@@ -308,7 +283,7 @@ async def chat(request: ChatRequest, background_tasks: BackgroundTasks, user_id:
 
 
 @app.post("/api/session/stream_chat")
-async def stream_chat(request: ChatRequest, background_tasks: BackgroundTasks, user_id: str = Depends(get_current_user)):
+async def stream_chat(request: ChatRequest, user_id: str = Depends(get_current_user)):
     """Process student message and stream tokens back natively via SSE (No Threading)."""
     if not request.session_id.startswith(f"{user_id}_"):
         raise HTTPException(status_code=403, detail="Unauthorized access to session")
@@ -362,8 +337,8 @@ async def stream_chat(request: ChatRequest, background_tasks: BackgroundTasks, u
                     if m.role == MessageRole.PATIENT:
                         patient_reply = m.content
                         break
-                # Safely enqueue the background task
-                background_tasks.add_task(generate_title_task, session_id, request.message, patient_reply, app)
+                # Safely enqueue to ARQ Redis worker
+                await app.state.arq_pool.enqueue_job("generate_title_task", session_id, request.message, patient_reply)
 
             note = result.get("professor_notes", [])[-1] if result.get("professor_notes") else None
             phase_val = result["phase"].value if hasattr(result["phase"], "value") else result["phase"]

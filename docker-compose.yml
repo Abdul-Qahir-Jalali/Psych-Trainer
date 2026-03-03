@@ -21,6 +21,20 @@ services:
       - redis
       - postgres
 
+  worker:
+    build: .
+    command: venv/bin/arq src.psychtrainer.service.worker.WorkerSettings
+    volumes:
+      - ./state:/app/state
+    environment:
+      - HOST=0.0.0.0
+      - REDIS_URI=redis://redis:6379
+    env_file:
+      - .env
+    depends_on:
+      - redis
+      - postgres
+
   redis:
     image: redis:7.2-alpine
     ports:
