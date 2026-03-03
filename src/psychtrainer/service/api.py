@@ -17,7 +17,7 @@ import uuid
 import os
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, HTTPException, Depends, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -251,7 +251,7 @@ async def get_session_state(session_id: str, user_id: str = Depends(get_current_
 
 
 @app.post("/api/session/chat", response_model=ChatResponse)
-async def chat(request: ChatRequest, user_id: str = Depends(get_current_user)):
+async def chat(request: ChatRequest, background_tasks: BackgroundTasks, user_id: str = Depends(get_current_user)):
     """Process student message via persistent workflow natively (async)."""
     if not request.session_id.startswith(f"{user_id}_"):
         raise HTTPException(status_code=403, detail="Unauthorized access to session")
@@ -296,7 +296,7 @@ async def chat(request: ChatRequest, user_id: str = Depends(get_current_user)):
 
     # 4. Async Title Generation on turn 1
     if result["turn_count"] == 1:
-        asyncio.create_task(generate_title_task(request.session_id, request.message, patient_reply, app))
+        background_tasks.add_task(generate_title_task, request.session_id, request.message, patient_reply, app)
 
     return ChatResponse(
         session_id=request.session_id,
@@ -308,7 +308,7 @@ async def chat(request: ChatRequest, user_id: str = Depends(get_current_user)):
 
 
 @app.post("/api/session/stream_chat")
-async def stream_chat(request: ChatRequest, user_id: str = Depends(get_current_user)):
+async def stream_chat(request: ChatRequest, background_tasks: BackgroundTasks, user_id: str = Depends(get_current_user)):
     """Process student message and stream tokens back natively via SSE (No Threading)."""
     if not request.session_id.startswith(f"{user_id}_"):
         raise HTTPException(status_code=403, detail="Unauthorized access to session")
@@ -362,8 +362,8 @@ async def stream_chat(request: ChatRequest, user_id: str = Depends(get_current_u
                     if m.role == MessageRole.PATIENT:
                         patient_reply = m.content
                         break
-                # Fire and forget the background task
-                asyncio.create_task(generate_title_task(session_id, request.message, patient_reply, app))
+                # Safely enqueue the background task
+                background_tasks.add_task(generate_title_task, session_id, request.message, patient_reply, app)
 
             note = result.get("professor_notes", [])[-1] if result.get("professor_notes") else None
             phase_val = result["phase"].value if hasattr(result["phase"], "value") else result["phase"]
