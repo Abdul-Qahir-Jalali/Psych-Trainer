@@ -12,8 +12,9 @@ from __future__ import annotations
 
 import logging
 
+import asyncio
+from fastembed import TextEmbedding
 from qdrant_client import QdrantClient
-from sentence_transformers import SentenceTransformer
 
 from psychtrainer.config import settings
 
@@ -25,30 +26,35 @@ class Retriever:
 
     def __init__(self):
         self.client = QdrantClient(path=settings.qdrant_path)
-        self.model = SentenceTransformer(settings.embedding_model)
+        self.model = TextEmbedding(settings.embedding_model)
 
-    def search(self, query: str, collection_name: str, limit: int = 3) -> str:
-        """Search a collection and return concatenated text results."""
+    async def search(self, query: str, collection_name: str, limit: int = 3) -> str:
+        """Search a collection and return concatenated text results asynchronously."""
         if not self.client.collection_exists(collection_name):
             return ""
 
-        query_vector = self.model.encode(query).tolist()
-        results = self.client.query_points(
-            collection_name=collection_name,
-            query=query_vector,
-            limit=limit,
-        )
+        loop = asyncio.get_running_loop()
+
+        def _sync_query():
+            query_vector = list(self.model.embed([query]))[0].tolist()
+            return self.client.query_points(
+                collection_name=collection_name,
+                query=query_vector,
+                limit=limit,
+            )
+
+        results = await loop.run_in_executor(None, _sync_query)
 
         return "\n---\n".join([hit.payload.get("text", "") for hit in results.points])
 
-    def get_patient_context(self, query: str) -> str:
+    async def get_patient_context(self, query: str) -> str:
         """Find relevant lines from the OSCE script."""
-        return self.search(query, "patient_script", limit=3)
+        return await self.search(query, "patient_script", limit=3)
 
-    def get_grading_criteria(self, query: str) -> str:
+    async def get_grading_criteria(self, query: str) -> str:
         """Find relevant grading rules from the rubric."""
-        return self.search(query, "grading_rubric", limit=3)
+        return await self.search(query, "grading_rubric", limit=3)
 
-    def get_medical_knowledge(self, query: str) -> str:
+    async def get_medical_knowledge(self, query: str) -> str:
         """Find relevant medical facts (MedQA)."""
-        return self.search(query, "medical_knowledge", limit=2)
+        return await self.search(query, "medical_knowledge", limit=2)

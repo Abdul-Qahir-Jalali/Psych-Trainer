@@ -36,8 +36,8 @@ async def patient_node(state: SimulationState, config: RunnableConfig, retriever
 
     # 1. Retrieve Context
     try:
-        patient_context = retriever.get_patient_context(student_msg)
-        medical_context = retriever.get_medical_knowledge(student_msg)
+        patient_context = await retriever.get_patient_context(student_msg)
+        medical_context = await retriever.get_medical_knowledge(student_msg)
     except Exception as e:
         logger.error(f"Retriever error (Patient): {e}")
         patient_context = ""

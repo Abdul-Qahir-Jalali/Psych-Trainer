@@ -19,7 +19,7 @@ from typing import Any
 
 from pypdf import PdfReader
 from qdrant_client import QdrantClient, models as qdrant_models
-from sentence_transformers import SentenceTransformer
+from fastembed import TextEmbedding
 
 from psychtrainer.config import settings
 
@@ -132,14 +132,14 @@ def load_few_shot_examples() -> str:
 
 # ── Embedding & Indexing ─────────────────────────────────────────
 
-_model: SentenceTransformer | None = None
+_model: TextEmbedding | None = None
 _client: QdrantClient | None = None
 
 
-def get_embedding_model() -> SentenceTransformer:
+def get_embedding_model() -> TextEmbedding:
     global _model
     if _model is None:
-        _model = SentenceTransformer(settings.embedding_model)
+        _model = TextEmbedding(settings.embedding_model)
     return _model
 
 
@@ -154,21 +154,21 @@ def index_chunks(
     chunks: list[TextChunk],
     collection_name: str,
     client: QdrantClient,
-    model: SentenceTransformer,
+    model: TextEmbedding,
 ) -> int:
     """Embed chunks and upsert them into Qdrant."""
     if not client.collection_exists(collection_name):
         client.create_collection(
             collection_name=collection_name,
             vectors_config=qdrant_models.VectorParams(
-                size=model.get_sentence_embedding_dimension(),
+                size=384,  # BAAI/bge-small-en-v1.5 dimension
                 distance=qdrant_models.Distance.COSINE,
             ),
         )
 
     points: list[qdrant_models.PointStruct] = []
     texts = [c.text for c in chunks]
-    embeddings = model.encode(texts, show_progress_bar=False)
+    embeddings = list(model.embed(texts))
 
     for i, (chunk, vector) in enumerate(zip(chunks, embeddings)):
         points.append(

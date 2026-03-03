@@ -72,7 +72,7 @@ async def professor_node(state: SimulationState, retriever: Retriever) -> dict:
 
     # Retrieve Rubric
     try:
-        criteria = retriever.get_grading_criteria(student_msg.content)
+        criteria = await retriever.get_grading_criteria(student_msg.content)
     except Exception as e:
         logger.error(f"Retriever error (Professor): {e}")
         criteria = ""
