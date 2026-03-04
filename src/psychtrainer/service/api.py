@@ -22,7 +22,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from supabase import create_client, Client
+import jwt
 from psycopg_pool import AsyncConnectionPool
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 import redis.asyncio as redis
@@ -51,16 +51,28 @@ logger = logging.getLogger(__name__)
 security = HTTPBearer()
 
 def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> str:
-    """Extracts and validates the JWT against Supabase, returning the distinct user_id."""
+    """Cryptographically validates the Supabase JWT locally (Zero-Latency)."""
     try:
-        supabase: Client = create_client(settings.supabase_url, settings.supabase_anon_key)
-        response = supabase.auth.get_user(credentials.credentials)
-        if not response.user:
-            raise ValueError("No user found.")
-        return response.user.id
+        # Avoid 500ms network round trips by doing the math locally
+        payload = jwt.decode(
+            credentials.credentials,
+            settings.supabase_jwt_secret,
+            algorithms=["HS256"],
+            audience="authenticated"
+        )
+        user_id = payload.get("sub")
+        if not user_id:
+            raise ValueError("JWT missing subject (user_id).")
+        return user_id
+    except jwt.ExpiredSignatureError:
+        logger.error("Auth failure: Token expired")
+        raise HTTPException(status_code=401, detail="Token expired")
+    except jwt.InvalidTokenError as e:
+        logger.error(f"Auth failure: Invalid token - {e}")
+        raise HTTPException(status_code=401, detail="Invalid token signature")
     except Exception as e:
         logger.error(f"Auth failure: {e}")
-        raise HTTPException(status_code=401, detail="Invalid or expired authentication token")
+        raise HTTPException(status_code=401, detail="Invalid authentication credentials")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):

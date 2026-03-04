@@ -60,6 +60,7 @@ class Settings(BaseSettings):
     # ── Authentication ───────────────────────────────────
     supabase_url: str = ""
     supabase_anon_key: str = ""
+    supabase_jwt_secret: str = ""
 
     # ── Rate Limiting ────────────────────────────────────
     redis_uri: str = ""

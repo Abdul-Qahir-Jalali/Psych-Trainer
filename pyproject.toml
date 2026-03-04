@@ -19,6 +19,7 @@ dependencies = [
     "litellm>=1.81.13",
     "psycopg>=3.3.3",
     "psycopg-pool>=3.3.0",
+    "PyJWT>=2.8.0",
     "pydantic>=2.12.5",
     "pydantic-settings>=2.13.0",
     "pypdf>=6.7.1",
