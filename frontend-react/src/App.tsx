@@ -17,13 +17,14 @@ function App() {
     const [currentSessionId, setCurrentSessionId] = useState(null);
     const [phase, setPhase] = useState('OFFLINE');
     const [turnCount, setTurnCount] = useState(0);
-    const [messages, setMessages] = useState([]);
-    const [evalNotes, setEvalNotes] = useState([]);
+    const [messages, setMessages] = useState<any[]>([]);
+    const [evalNotes, setEvalNotes] = useState<any[]>([]);
     const [gradeReport, setGradeReport] = useState(null);
     
     // UI State
     const [isWaiting, setIsWaiting] = useState(false);
     const [currentStreamText, setCurrentStreamText] = useState('');
+    const [failedMessage, setFailedMessage] = useState<string>('');
 
     // --- Authentication ---
     useEffect(() => {
@@ -197,9 +198,18 @@ function App() {
             setMessages(prev => [...prev, { role: 'patient', content: streamedResponse }]);
             setCurrentStreamText('');
 
-        } catch (err) {
+        } catch (err: any) {
             console.error(err);
-            setMessages(prev => [...prev, { role: 'system', content: `⚠️ Error: ${err.message}` }]);
+            setMessages(prev => {
+                const newMsgs = [...prev];
+                // Pop the stranded student message out of the array
+                if (newMsgs.length > 0 && newMsgs[newMsgs.length - 1].role === 'student') {
+                    newMsgs.pop();
+                }
+                newMsgs.push({ role: 'system', content: `⚠️ Connection Failed: ${err.message}. Your text has been restored below so you can try again.` });
+                return newMsgs;
+            });
+            setFailedMessage(text);
             setCurrentStreamText('');
         } finally {
             setIsWaiting(false);
@@ -307,6 +317,8 @@ function App() {
                             isWaiting={isWaiting} 
                             currentStreamText={currentStreamText}
                             onSendMessage={handleSendMessage}
+                            failedMessage={failedMessage}
+                            onClearFailedMessage={() => setFailedMessage('')}
                         />
                         <EvaluationPanel 
                             phase={phase}

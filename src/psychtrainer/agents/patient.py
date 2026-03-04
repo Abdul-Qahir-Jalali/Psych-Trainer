@@ -20,7 +20,12 @@ from psychtrainer.workflow.state import ChatMessage, MessageRole, Phase, Simulat
 logger = logging.getLogger(__name__)
 
 from psychtrainer.workflow.prompt_registry import get_system_prompt
+from tenacity import retry, stop_after_attempt, wait_exponential
 
+@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10), reraise=True)
+async def _invoke_llm_with_retry(llm: ChatLiteLLM, lc_messages: list, config: RunnableConfig):
+    """Executes the LLM with enterprise algebraic fallback (exponential backoff)."""
+    return await llm.ainvoke(lc_messages, config)
 
 # ── The Agent Logic ──────────────────────────────────────────────
 
@@ -70,13 +75,11 @@ async def patient_node(state: SimulationState, config: RunnableConfig, retriever
     )
 
     try:
-        response = await llm.ainvoke(lc_messages, config)
+        response = await _invoke_llm_with_retry(llm, lc_messages, config)
         content = response.content
-            
-            
     except Exception as e:
-        logger.error(f"Patient LLM error: {e}")
-        content = "I'm... not sure how to answer that."  # Better fallback
+        logger.error(f"Patient LLM error exhausted all retries: {e}")
+        raise e  # Fail-fast to trigger HTTP 500 error on the frontend
 
     return {
         "messages": [ChatMessage(role=MessageRole.PATIENT, content=content)],

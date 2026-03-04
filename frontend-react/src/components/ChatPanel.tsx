@@ -11,13 +11,17 @@ interface ChatPanelProps {
     isWaiting: boolean;
     currentStreamText: string;
     onSendMessage: (text: string) => void;
+    failedMessage?: string;
+    onClearFailedMessage?: () => void;
 }
 
 export function ChatPanel({ 
     messages, 
     isWaiting, 
     currentStreamText, 
-    onSendMessage
+    onSendMessage,
+    failedMessage,
+    onClearFailedMessage
 }: ChatPanelProps) {
     const [inputText, setInputText] = useState('');
     const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -27,6 +31,17 @@ export function ChatPanel({
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [messages, currentStreamText]);
+
+    // Recover stranded text on API failure
+    useEffect(() => {
+        if (failedMessage && onClearFailedMessage) {
+            setInputText(failedMessage);
+            onClearFailedMessage();
+            if (textareaRef.current) {
+                textareaRef.current.style.height = 'auto';
+            }
+        }
+    }, [failedMessage, onClearFailedMessage]);
 
     const handleInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
         setInputText(e.target.value);
@@ -124,7 +139,7 @@ export function ChatPanel({
                     onChange={handleInput}
                     onKeyDown={handleKeyDown}
                     disabled={isWaiting}
-                    rows="1"
+                    rows={1}
                 />
                 <button 
                     className="btn-send"
