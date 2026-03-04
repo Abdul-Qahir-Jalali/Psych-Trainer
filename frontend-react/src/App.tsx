@@ -1,31 +1,27 @@
-import { useState, useEffect } from 'react';
+import { useEffect } from 'react';
 import { supabase } from './lib/supabase';
 import { AuthScreen } from './components/AuthScreen';
 import { Sidebar } from './components/Sidebar';
 import { ChatPanel } from './components/ChatPanel';
 import { EvaluationPanel } from './components/EvaluationPanel';
-import { fetchEventSource } from '@microsoft/fetch-event-source';
-
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
+import { useStore } from './store/useStore';
 
 function App() {
-    const [sessionToken, setSessionToken] = useState(null);
-    const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-    const [mobileTab, setMobileTab] = useState('chat');
-
-    // App State
-    const [sessions, setSessions] = useState([]);
-    const [currentSessionId, setCurrentSessionId] = useState(null);
-    const [phase, setPhase] = useState('OFFLINE');
-    const [turnCount, setTurnCount] = useState(0);
-    const [messages, setMessages] = useState<any[]>([]);
-    const [evalNotes, setEvalNotes] = useState<any[]>([]);
-    const [gradeReport, setGradeReport] = useState(null);
+    const sessionToken = useStore(state => state.sessionToken);
+    const setSessionToken = useStore(state => state.setSessionToken);
+    const loadSessionsList = useStore(state => state.loadSessionsList);
+    const handleNewSession = useStore(state => state.handleNewSession);
     
-    // UI State
-    const [isWaiting, setIsWaiting] = useState(false);
-    const [currentStreamText, setCurrentStreamText] = useState('');
-    const [failedMessage, setFailedMessage] = useState<string>('');
+    const isSidebarOpen = useStore(state => state.isSidebarOpen);
+    const setIsSidebarOpen = useStore(state => state.setIsSidebarOpen);
+    const mobileTab = useStore(state => state.mobileTab);
+    const setMobileTab = useStore(state => state.setMobileTab);
+    const phase = useStore(state => state.phase);
+    const turnCount = useStore(state => state.turnCount);
+    const isWaiting = useStore(state => state.isWaiting);
+    const currentSessionId = useStore(state => state.currentSessionId);
+    const handleLogout = useStore(state => state.handleLogout);
+    const handleStartSession = useStore(state => state.handleStartSession);
 
     // --- Authentication ---
     useEffect(() => {
@@ -38,7 +34,7 @@ function App() {
         });
 
         return () => subscription.unsubscribe();
-    }, []);
+    }, [setSessionToken]);
 
     // --- Initial Load ---
     useEffect(() => {
@@ -48,186 +44,6 @@ function App() {
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [sessionToken]);
-
-    const getHeaders = () => {
-        const headers = { 'Content-Type': 'application/json' };
-        if (sessionToken) headers['Authorization'] = `Bearer ${sessionToken}`;
-        return headers;
-    };
-
-    const loadSessionsList = async () => {
-        try {
-            const res = await fetch(`${API_BASE}/sessions`, { headers: getHeaders() });
-            if (!res.ok) throw new Error('Failed to fetch sessions');
-            const data = await res.json();
-            setSessions(data.sessions || []);
-        } catch (err) {
-            console.error(err);
-        }
-    };
-
-    const loadSession = async (id: string) => {
-        if (!id) return;
-        try {
-            const res = await fetch(`${API_BASE}/session/${id}`, { headers: getHeaders() });
-            if (!res.ok) throw new Error('Failed to load session');
-            const data = await res.json();
-            
-            setCurrentSessionId(data.session_id);
-            setPhase(data.is_ended && data.grade_report ? 'DEBRIEF' : data.phase || 'OFFLINE');
-            setTurnCount(data.turn_count);
-            setMessages(data.messages || []);
-            setGradeReport(data.grade_report || null);
-            setEvalNotes([]); // Past notes aren't currently preserved in backend history view, but we'll reset
-            if (window.innerWidth < 768) setIsSidebarOpen(false);
-        } catch (err) {
-            console.error(err);
-        }
-    };
-
-    const handleNewSession = () => {
-        setCurrentSessionId(null);
-        setPhase('OFFLINE');
-        setTurnCount(0);
-        setMessages([]);
-        setEvalNotes([]);
-        setGradeReport(null);
-        setCurrentStreamText('');
-        if (window.innerWidth < 768) setIsSidebarOpen(false);
-    };
-
-    const handleStartSession = async () => {
-        try {
-            setIsWaiting(true);
-            const res = await fetch(`${API_BASE}/session/start`, {
-                method: 'POST',
-                headers: getHeaders(),
-                body: JSON.stringify({})
-            });
-            if (!res.ok) throw new Error('Failed to start session');
-            const data = await res.json();
-            
-            setCurrentSessionId(data.session_id);
-            setPhase(data.phase);
-            setMessages([{ role: 'system', content: data.message }]);
-            setEvalNotes(["Session started. Observing student's approach..."]);
-            loadSessionsList();
-        } catch (err) {
-            console.error(err);
-            setMessages(prev => [...prev, { role: 'system', content: `⚠️ Failed to start: ${err.message}` }]);
-        } finally {
-            setIsWaiting(false);
-        }
-    };
-
-    const handleSendMessage = async (text: string) => {
-        // If no session, start one first on the fly
-        let activeSessionId = currentSessionId;
-        if (!activeSessionId) {
-            await handleStartSession();
-            // In a real app we'd await state updates, but let's assume session id is fetched
-            return; // Simplified flow: the user has to click start, or we intercept
-        }
-
-        setMessages(prev => [...prev, { role: 'student', content: text }]);
-        setIsWaiting(true);
-        setCurrentStreamText('');
-
-        try {
-            let streamedResponse = "";
-            let finalMessages: any[] = [];
-
-            await fetchEventSource(`${API_BASE}/session/stream_chat`, {
-                method: 'POST',
-                headers: getHeaders(),
-                body: JSON.stringify({ session_id: activeSessionId, message: text }),
-                onmessage(ev) {
-                    if (ev.event === 'done') {
-                        try {
-                            const data = JSON.parse(ev.data);
-                            setPhase(data.phase);
-                            setTurnCount(data.turn_count);
-                            if (data.professor_note) {
-                                setEvalNotes(prev => [...prev, data.professor_note]);
-                            }
-                        } catch (e) {
-                            console.warn("Parse error on 'done' event", e);
-                        }
-                    } else if (ev.event === 'error') {
-                        throw new Error(JSON.parse(ev.data).error || "Stream Error");
-                    } else if (ev.event === 'message' || ev.event === '') {
-                        try {
-                            const data = JSON.parse(ev.data);
-                            if (data.token) {
-                                streamedResponse += data.token;
-                                setCurrentStreamText(streamedResponse);
-                            }
-                        } catch (e) {
-                            console.warn("Parse error on message data", e);
-                        }
-                    }
-                },
-                onerror(err) {
-                    throw err; // Re-throw to hit the catch block below
-                },
-                onclose() {
-                    // Fired natively by library when stream terminates successfully
-                    setMessages(prev => {
-                        finalMessages = [...prev, { role: 'patient', content: streamedResponse }];
-                        return finalMessages;
-                    });
-                    setCurrentStreamText('');
-                }
-            });
-
-        } catch (err: any) {
-            console.error(err);
-            setMessages(prev => {
-                const newMsgs = [...prev];
-                // Pop the stranded student message out of the array
-                if (newMsgs.length > 0 && newMsgs[newMsgs.length - 1].role === 'student') {
-                    newMsgs.pop();
-                }
-                newMsgs.push({ role: 'system', content: `⚠️ Connection Failed: ${err.message}. Your text has been restored below so you can try again.` });
-                return newMsgs;
-            });
-            setFailedMessage(text);
-            setCurrentStreamText('');
-        } finally {
-            setIsWaiting(false);
-        }
-    };
-
-    const handleEndSession = async () => {
-        if (!currentSessionId) return;
-        if (!window.confirm('End the session and receive your grade?')) return;
-
-        try {
-            setIsWaiting(true);
-            const res = await fetch(`${API_BASE}/session/end`, {
-                method: 'POST',
-                headers: getHeaders(),
-                body: JSON.stringify({ session_id: currentSessionId })
-            });
-            if (!res.ok) throw new Error('Failed to end session');
-            const data = await res.json();
-            
-            setGradeReport(data.report);
-            setPhase('DEBRIEF');
-            setMessages(prev => [...prev, { role: 'system', content: '📋 Session ended. Your grade report is ready in the panel →' }]);
-            loadSessionsList();
-        } catch (err) {
-            console.error(err);
-            setMessages(prev => [...prev, { role: 'system', content: `⚠️ Grading error: ${err.message}` }]);
-        } finally {
-            setIsWaiting(false);
-        }
-    };
-
-    const handleLogout = async () => {
-        await supabase.auth.signOut();
-        setSessionToken(null);
-    };
 
     if (!sessionToken) {
         return <AuthScreen />;
@@ -270,12 +86,7 @@ function App() {
 
             <main id="app-main">
                 <div className={`sidebar-wrapper ${isSidebarOpen ? 'open' : 'closed'}`}>
-                    <Sidebar 
-                        sessions={sessions} 
-                        currentSessionId={currentSessionId}
-                        onNewSession={handleNewSession}
-                        onSelectSession={loadSession}
-                    />
+                    <Sidebar />
                 </div>
 
                 <div className="mobile-tabs" style={{ display: window.innerWidth < 768 ? 'flex' : 'none' }}>
@@ -294,21 +105,8 @@ function App() {
                     </div>
                 ) : (
                     <>
-                        <ChatPanel 
-                            messages={messages} 
-                            isWaiting={isWaiting} 
-                            currentStreamText={currentStreamText}
-                            onSendMessage={handleSendMessage}
-                            failedMessage={failedMessage}
-                            onClearFailedMessage={() => setFailedMessage('')}
-                        />
-                        <EvaluationPanel 
-                            phase={phase}
-                            turnCount={turnCount}
-                            notes={evalNotes}
-                            gradeReport={gradeReport}
-                            onEndSession={handleEndSession}
-                        />
+                        <ChatPanel />
+                        <EvaluationPanel />
                     </>
                 )}
             </main>

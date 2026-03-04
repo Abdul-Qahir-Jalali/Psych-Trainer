@@ -7,21 +7,12 @@ export interface GradeReport {
     constructive_feedback: string;
 }
 
-interface EvaluationPanelProps {
-    phase: string;
-    turnCount: number;
-    notes: string[];
-    gradeReport: GradeReport | null;
-    onEndSession: () => void;
-}
+import { useStore } from '../store/useStore';
 
-export function EvaluationPanel({ 
-    phase, 
-    turnCount, 
-    notes, 
-    gradeReport, 
-    onEndSession 
-}: EvaluationPanelProps) {
+export function EvaluationPanel() {
+    const notes = useStore(state => state.evalNotes);
+    const gradeReport = useStore(state => state.gradeReport);
+    const onEndSession = useStore(state => state.handleEndSession);
     return (
         <section className="eval-panel">
             <div className="eval-header">

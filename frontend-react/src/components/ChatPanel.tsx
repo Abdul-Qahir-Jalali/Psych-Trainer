@@ -6,23 +6,16 @@ export interface ChatMessage {
     content: string;
 }
 
-interface ChatPanelProps {
-    messages: ChatMessage[];
-    isWaiting: boolean;
-    currentStreamText: string;
-    onSendMessage: (text: string) => void;
-    failedMessage?: string;
-    onClearFailedMessage?: () => void;
-}
+import { useStore } from '../store/useStore';
 
-export function ChatPanel({ 
-    messages, 
-    isWaiting, 
-    currentStreamText, 
-    onSendMessage,
-    failedMessage,
-    onClearFailedMessage
-}: ChatPanelProps) {
+export function ChatPanel() {
+    const messages = useStore(state => state.messages);
+    const isWaiting = useStore(state => state.isWaiting);
+    const currentStreamText = useStore(state => state.currentStreamText);
+    const failedMessage = useStore(state => state.failedMessage);
+    const onSendMessage = useStore(state => state.handleSendMessage);
+    const setFailedMessage = useStore(state => state.setFailedMessage);
+    const onClearFailedMessage = () => setFailedMessage('');
     const [inputText, setInputText] = useState('');
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -98,7 +91,7 @@ export function ChatPanel({
                         {msg.role === 'patient' && <div className="avatar">🧑</div>}
                         <div className="bubble">
                             {/* React completely neutralizes XSS here by safely evaluating msg.content */}
-                            {msg.content.split('\n').map((line, i) => (
+                            {msg.content.split('\n').map((line: string, i: number) => (
                                 <span key={i}>
                                     {line}
                                     <br />
@@ -112,7 +105,7 @@ export function ChatPanel({
                     <div className="message system-message">
                         <div className="avatar">🧑</div>
                         <div className="bubble">
-                            {currentStreamText.split('\n').map((line, i) => (
+                            {currentStreamText.split('\n').map((line: string, i: number) => (
                                 <span key={i}>
                                     {line}
                                     <br />

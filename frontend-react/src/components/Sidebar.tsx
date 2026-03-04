@@ -1,18 +1,11 @@
 import { FileText, Search } from 'lucide-react';
+import { useStore } from '../store/useStore';
 
-interface Session {
-    session_id: string;
-    title?: string;
-}
-
-interface SidebarProps {
-    sessions: Session[];
-    currentSessionId: string | null;
-    onNewSession: () => void;
-    onSelectSession: (id: string) => void;
-}
-
-export function Sidebar({ sessions, currentSessionId, onNewSession, onSelectSession }: SidebarProps) {
+export function Sidebar() {
+    const sessions = useStore(state => state.sessions);
+    const currentSessionId = useStore(state => state.currentSessionId);
+    const onNewSession = useStore(state => state.handleNewSession);
+    const onSelectSession = useStore(state => state.loadSession);
     return (
         <aside className="sidebar">
             <div className="sidebar-top-actions">
