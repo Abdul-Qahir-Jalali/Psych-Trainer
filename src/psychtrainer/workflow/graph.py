@@ -11,6 +11,7 @@ import logging
 from functools import partial
 
 import litellm
+from pydantic import BaseModel
 from langgraph.graph import END, StateGraph
 
 from psychtrainer.agents.patient import patient_node
@@ -25,6 +26,9 @@ logger = logging.getLogger(__name__)
 
 from psychtrainer.workflow.prompt_registry import get_system_prompt
 
+class RouterDecision(BaseModel):
+    """Strict JSON schema enforcing the router's output structure."""
+    phase: Phase
 
 async def _router_node(state: SimulationState) -> dict:
     """Decides the next phase based on conversation history (asynchronously)."""
@@ -57,20 +61,30 @@ async def _router_node(state: SimulationState) -> dict:
             model=settings.llm_model,
             messages=[{"role": "user", "content": prompt}],
             temperature=0.0,
-            max_tokens=10,
+            max_tokens=20,
             api_key=settings.groq_api_key,
+            response_format=RouterDecision,
         )
-        raw_phase = response.choices[0].message.content.strip().lower()
+        # Parse the guaranteed JSON using litellm's internal Pydantic validation
+        # The schema ensures response contains exactly {"phase": "something"}
+        try:
+            decision_json = response.choices[0].message.content
+            import json
+            parsed = json.loads(decision_json)
+            raw_phase = parsed.get("phase", "").lower()
+        except Exception:
+            # Fallback if the model completely fails JSON validation at the network level
+            raw_phase = response.choices[0].message.content.strip().lower()
 
         # Phase transition logic
         for phase in Phase:
-            if phase.value in raw_phase:
+            if phase.value == raw_phase:
                 old_idx = list(Phase).index(current_phase)
                 new_idx = list(Phase).index(phase)
                 if new_idx >= old_idx:
                     return {"phase": phase, "is_ended": phase == Phase.DEBRIEF}
-    except Exception:
-        pass
+    except Exception as e:
+        logger.error(f"Router node failed to parse JSON decision: {e}")
 
     return {"phase": current_phase}
 
