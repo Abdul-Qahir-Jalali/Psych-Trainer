@@ -4,6 +4,7 @@ import { AuthScreen } from './components/AuthScreen';
 import { Sidebar } from './components/Sidebar';
 import { ChatPanel } from './components/ChatPanel';
 import { EvaluationPanel } from './components/EvaluationPanel';
+import { fetchEventSource } from '@microsoft/fetch-event-source';
 
 const API_BASE = 'http://localhost:8000/api'; // Change to empty string in production if serving from same origin
 
@@ -133,70 +134,51 @@ function App() {
         setCurrentStreamText('');
 
         try {
-            const res = await fetch(`${API_BASE}/session/stream_chat`, {
+            let streamedResponse = "";
+            let finalMessages: any[] = [];
+
+            await fetchEventSource(`${API_BASE}/session/stream_chat`, {
                 method: 'POST',
                 headers: getHeaders(),
-                body: JSON.stringify({ session_id: activeSessionId, message: text })
-            });
-
-            if (!res.ok) {
-                if (res.status === 429) {
-                    throw new Error("You are speaking too fast. Please wait a moment.");
-                }
-                throw new Error('API Request failed');
-            }
-
-            const reader = res.body.getReader();
-            const decoder = new TextDecoder("utf-8");
-            let done = false;
-            let buffer = "";
-            let streamedResponse = "";
-            let currentEvent = null;
-
-            while (!done) {
-                const { value, done: readerDone } = await reader.read();
-                if (value) {
-                    buffer += decoder.decode(value, { stream: true });
-                    const lines = buffer.split('\n');
-                    buffer = lines.pop(); // Keep incomplete line
-
-                    for (let i = 0; i < lines.length; i++) {
-                        const line = lines[i].trim();
-                        if (!line) continue;
-
-                        if (line.startsWith('event: ')) {
-                            currentEvent = line.substring(7).trim();
-                        } else if (line.startsWith('data: ')) {
-                            const dataStr = line.substring(6).trim();
-                            try {
-                                const data = JSON.parse(dataStr);
-                                if (currentEvent === 'done') {
-                                    setPhase(data.phase);
-                                    setTurnCount(data.turn_count);
-                                    if (data.professor_note) {
-                                        setEvalNotes(prev => [...prev, data.professor_note]);
-                                    }
-                                    done = true;
-                                    break;
-                                } else if (currentEvent === 'error') {
-                                    throw new Error(data.error);
-                                } else if (data.token) {
-                                    streamedResponse += data.token;
-                                    setCurrentStreamText(streamedResponse);
-                                }
-                            } catch (e) {
-                                console.warn("Parse error", e);
+                body: JSON.stringify({ session_id: activeSessionId, message: text }),
+                onmessage(ev) {
+                    if (ev.event === 'done') {
+                        try {
+                            const data = JSON.parse(ev.data);
+                            setPhase(data.phase);
+                            setTurnCount(data.turn_count);
+                            if (data.professor_note) {
+                                setEvalNotes(prev => [...prev, data.professor_note]);
                             }
-                            currentEvent = null;
+                        } catch (e) {
+                            console.warn("Parse error on 'done' event", e);
+                        }
+                    } else if (ev.event === 'error') {
+                        throw new Error(JSON.parse(ev.data).error || "Stream Error");
+                    } else if (ev.event === 'message' || ev.event === '') {
+                        try {
+                            const data = JSON.parse(ev.data);
+                            if (data.token) {
+                                streamedResponse += data.token;
+                                setCurrentStreamText(streamedResponse);
+                            }
+                        } catch (e) {
+                            console.warn("Parse error on message data", e);
                         }
                     }
+                },
+                onerror(err) {
+                    throw err; // Re-throw to hit the catch block below
+                },
+                onclose() {
+                    // Fired natively by library when stream terminates successfully
+                    setMessages(prev => {
+                        finalMessages = [...prev, { role: 'patient', content: streamedResponse }];
+                        return finalMessages;
+                    });
+                    setCurrentStreamText('');
                 }
-                if (readerDone) done = true;
-            }
-
-            // Commit final stream to messages
-            setMessages(prev => [...prev, { role: 'patient', content: streamedResponse }]);
-            setCurrentStreamText('');
+            });
 
         } catch (err: any) {
             console.error(err);
