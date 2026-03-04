@@ -6,7 +6,7 @@ import { ChatPanel } from './components/ChatPanel';
 import { EvaluationPanel } from './components/EvaluationPanel';
 import { fetchEventSource } from '@microsoft/fetch-event-source';
 
-const API_BASE = 'http://localhost:8000/api'; // Change to empty string in production if serving from same origin
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
 
 function App() {
     const [sessionToken, setSessionToken] = useState(null);
