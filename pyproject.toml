@@ -29,6 +29,7 @@ dependencies = [
     "supabase>=2.28.0",
     "tenacity>=8.5.0",
     "uvicorn[standard]>=0.41.0",
+    "sentence-transformers>=2.3.0",
 ]
 
 [build-system]

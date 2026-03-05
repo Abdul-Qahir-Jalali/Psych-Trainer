@@ -19,7 +19,7 @@ from typing import Any
 
 from pypdf import PdfReader
 from qdrant_client import QdrantClient, models as qdrant_models
-from fastembed import TextEmbedding
+from fastembed import TextEmbedding, SparseTextEmbedding
 
 from psychtrainer.config import settings
 
@@ -133,6 +133,7 @@ def load_few_shot_examples() -> str:
 # ── Embedding & Indexing ─────────────────────────────────────────
 
 _model: TextEmbedding | None = None
+_sparse_model: SparseTextEmbedding | None = None
 _client: QdrantClient | None = None
 
 
@@ -141,6 +142,13 @@ def get_embedding_model() -> TextEmbedding:
     if _model is None:
         _model = TextEmbedding(settings.embedding_model)
     return _model
+
+
+def get_sparse_embedding_model() -> SparseTextEmbedding:
+    global _sparse_model
+    if _sparse_model is None:
+        _sparse_model = SparseTextEmbedding(settings.sparse_embedding_model)
+    return _sparse_model
 
 
 def get_qdrant_client() -> QdrantClient:
@@ -157,24 +165,37 @@ def index_chunks(
     model: TextEmbedding,
 ) -> int:
     """Embed chunks and upsert them into Qdrant."""
+    sparse_model = get_sparse_embedding_model()
+
     if not client.collection_exists(collection_name):
         client.create_collection(
             collection_name=collection_name,
-            vectors_config=qdrant_models.VectorParams(
-                size=384,  # BAAI/bge-small-en-v1.5 dimension
-                distance=qdrant_models.Distance.COSINE,
-            ),
+            vectors_config={
+                "dense": qdrant_models.VectorParams(
+                    size=settings.embedding_dimension,
+                    distance=qdrant_models.Distance.COSINE,
+                )
+            },
+            sparse_vectors_config={
+                "sparse": qdrant_models.SparseVectorParams(
+                    modifier=qdrant_models.Modifier.IDF
+                )
+            }
         )
 
     points: list[qdrant_models.PointStruct] = []
     texts = [c.text for c in chunks]
-    embeddings = list(model.embed(texts))
+    dense_embeddings = list(model.embed(texts))
+    sparse_embeddings = list(sparse_model.embed(texts))
 
-    for i, (chunk, vector) in enumerate(zip(chunks, embeddings)):
+    for i, (chunk, dense_vec, sparse_vec) in enumerate(zip(chunks, dense_embeddings, sparse_embeddings)):
         points.append(
             qdrant_models.PointStruct(
                 id=i,
-                vector=vector.tolist(),
+                vector={
+                    "dense": dense_vec.tolist(),
+                    "sparse": sparse_vec.as_object()
+                },
                 payload={"text": chunk.text, **chunk.metadata},
             )
         )
