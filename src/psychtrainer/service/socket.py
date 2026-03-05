@@ -8,7 +8,7 @@ WebSocket Handler — Real-time chat.
 from __future__ import annotations
 
 import asyncio
-import logging
+import structlog
 from concurrent.futures import ThreadPoolExecutor
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
@@ -16,7 +16,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from psychtrainer.agents.professor import generate_final_grade
 from psychtrainer.workflow.state import ChatMessage, MessageRole
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 router = APIRouter()
 executor = ThreadPoolExecutor(max_workers=5)
 

@@ -6,7 +6,6 @@ Usage:
     uv run python scripts/ingest_data.py
 """
 
-import logging
 import sys
 from pathlib import Path
 
@@ -21,12 +20,12 @@ from psychtrainer.rag.ingest import (
     load_medqa,
     load_pdf,
 )
+from psychtrainer.logger_setup import setup_logger
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s │ %(levelname)-7s │ %(message)s",
-)
-logger = logging.getLogger(__name__)
+import structlog
+
+setup_logger()
+logger = structlog.get_logger(__name__)
 
 
 def main():

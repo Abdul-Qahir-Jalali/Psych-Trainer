@@ -30,6 +30,7 @@ dependencies = [
     "tenacity>=8.5.0",
     "uvicorn[standard]>=0.41.0",
     "sentence-transformers>=2.3.0",
+    "structlog>=24.0.0",
 ]
 
 [build-system]

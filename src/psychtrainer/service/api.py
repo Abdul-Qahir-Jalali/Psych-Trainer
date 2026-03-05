@@ -10,8 +10,9 @@ from __future__ import annotations
 
 import asyncio
 import json
-import logging
 import queue
+import structlog
+from psychtrainer.logger_setup import setup_logger
 import threading
 import uuid
 import os
@@ -49,7 +50,8 @@ from psychtrainer.service.socket import router as socket_router
 from psychtrainer.workflow.graph import build_workflow
 from psychtrainer.workflow.state import ChatMessage, MessageRole, Phase
 
-logger = logging.getLogger(__name__)
+setup_logger()
+logger = structlog.get_logger(__name__)
 
 security = HTTPBearer()
 
@@ -71,13 +73,13 @@ def get_current_user(request: Request, credentials: HTTPAuthorizationCredentials
         request.state.user_id = user_id
         return user_id
     except jwt.ExpiredSignatureError:
-        logger.error("Auth failure: Token expired")
+        logger.error("auth_failure", reason="Token expired")
         raise HTTPException(status_code=401, detail="Token expired")
     except jwt.InvalidTokenError as e:
-        logger.error(f"Auth failure: Invalid token - {e}")
+        logger.error("auth_failure", detail=str(e), reason="invalid_token")
         raise HTTPException(status_code=401, detail="Invalid token signature")
     except Exception as e:
-        logger.error(f"Auth failure: {e}")
+        logger.error("auth_failure", detail=str(e))
         raise HTTPException(status_code=401, detail="Invalid authentication credentials")
 
 @asynccontextmanager

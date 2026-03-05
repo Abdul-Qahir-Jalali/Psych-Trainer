@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import csv
 import json
-import logging
+import structlog
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -23,7 +23,7 @@ from fastembed import TextEmbedding, SparseTextEmbedding
 
 from psychtrainer.config import settings
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 # ── Internal Type ────────────────────────────────────────────────
@@ -83,7 +83,7 @@ def load_medqa() -> list[TextChunk]:
     path = Path(settings.medqa_jsonl)
 
     if not path.exists():
-        logger.warning(f"MedQA file missing: {path}")
+        logger.warning("medqa_missing", path=str(path))
         return []
 
     with open(path, "r", encoding="utf-8") as f:

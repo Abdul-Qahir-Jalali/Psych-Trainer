@@ -10,7 +10,7 @@ This module provides the `Retriever` class which:
 
 from __future__ import annotations
 
-import logging
+import structlog
 
 import asyncio
 from fastembed import TextEmbedding, SparseTextEmbedding
@@ -19,7 +19,7 @@ from qdrant_client import QdrantClient, models as qdrant_models
 
 from psychtrainer.config import settings
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class Retriever:

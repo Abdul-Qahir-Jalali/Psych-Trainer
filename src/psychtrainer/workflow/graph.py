@@ -7,7 +7,7 @@ Student → Patient → Professor → Router → (Loop or End)
 
 from __future__ import annotations
 
-import logging
+import structlog
 from functools import partial
 
 import litellm
@@ -21,7 +21,7 @@ from psychtrainer.config import settings
 from psychtrainer.rag.knowledge import Retriever
 from psychtrainer.workflow.state import Phase, SimulationState
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 from psychtrainer.workflow.prompt_registry import get_system_prompt

@@ -8,8 +8,10 @@ This provides infinite retry resilience and prevents OOM crashes.
 
 from __future__ import annotations
 
-import logging
+import structlog
 from typing import Any
+
+from psychtrainer.logger_setup import setup_logger
 
 import litellm
 import redis.asyncio as redis
@@ -21,7 +23,8 @@ from psychtrainer.config import settings
 from psychtrainer.workflow.graph import build_workflow
 from psychtrainer.rag.knowledge import Retriever
 
-logger = logging.getLogger(__name__)
+setup_logger()
+logger = structlog.get_logger(__name__)
 
 
 async def generate_title_task(ctx: dict[str, Any], session_id: str, student_msg: str, patient_msg: str) -> str:
@@ -54,12 +57,12 @@ async def generate_title_task(ctx: dict[str, Any], session_id: str, student_msg:
         try:
             supabase.table("sessions").update({"title": title}).eq("id", session_id).execute()
         except Exception as e:
-            logger.error(f"Failed to update Supabase UI title: {e}")
+            logger.error("ui_title_sync_failed", detail=str(e), session_id=session_id)
             
-        logger.info(f"Generated title for {session_id}: {title}")
+        logger.info("title_generated", session_id=session_id, title=title)
         return title
     except Exception as e:
-        logger.error(f"Title generation failed: {e}")
+        logger.error("title_generation_failed", detail=str(e), session_id=session_id)
         raise e  # Allow ARQ to automatically retry if Groq is down
 
 

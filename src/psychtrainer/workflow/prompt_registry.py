@@ -7,13 +7,13 @@ This module guarantees 0-downtime prompt engineering.
 3. Automatically caches the new instruction in Redis for 12 hours.
 """
 
-import logging
+import structlog
 from redis.asyncio import Redis, ConnectionPool
 from supabase import create_client, Client
 
 from psychtrainer.config import settings
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 # Re-use the FastAPI lifespan pool if available, but define for standalone testing
 pool = ConnectionPool.from_url(str(settings.redis_uri), decode_responses=True)

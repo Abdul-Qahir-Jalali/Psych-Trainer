@@ -9,7 +9,7 @@ a final report, but never speaks to the user.
 from __future__ import annotations
 
 import json
-import logging
+import structlog
 
 import litellm
 
@@ -18,7 +18,7 @@ from psychtrainer.rag.knowledge import Retriever
 from psychtrainer.workflow.state import GradeReport, MessageRole, SimulationState
 from psychtrainer.workflow.prompt_registry import get_system_prompt
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 # ── The Prompt (Co-located for easy editing) ─────────────────────

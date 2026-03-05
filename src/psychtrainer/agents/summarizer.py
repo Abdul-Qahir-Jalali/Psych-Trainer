@@ -6,14 +6,14 @@ If the conversation exceeds a certain length, it summarizes the oldest messages
 to save tokens, returning a truncated message array.
 """
 
-import logging
+import structlog
 
 import litellm
 
 from psychtrainer.config import settings
 from psychtrainer.workflow.state import SimulationState
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 SUMMARIZER_PROMPT = """\
 You are an expert clinical scribe.
