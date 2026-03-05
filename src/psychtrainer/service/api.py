@@ -17,12 +17,15 @@ import uuid
 import os
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException, Depends, BackgroundTasks
+from fastapi import FastAPI, HTTPException, Depends, BackgroundTasks, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import jwt
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 from psycopg_pool import AsyncConnectionPool
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 import redis.asyncio as redis
@@ -50,7 +53,9 @@ logger = logging.getLogger(__name__)
 
 security = HTTPBearer()
 
-def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> str:
+limiter = Limiter(key_func=lambda req: req.state.user_id if hasattr(req.state, "user_id") else get_remote_address(req))
+
+def get_current_user(request: Request, credentials: HTTPAuthorizationCredentials = Depends(security)) -> str:
     """Cryptographically validates the Supabase JWT locally (Zero-Latency)."""
     try:
         # Avoid 500ms network round trips by doing the math locally
@@ -63,6 +68,7 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(securit
         user_id = payload.get("sub")
         if not user_id:
             raise ValueError("JWT missing subject (user_id).")
+        request.state.user_id = user_id
         return user_id
     except jwt.ExpiredSignatureError:
         logger.error("Auth failure: Token expired")
@@ -127,6 +133,8 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="PsychTrainer", version="3.1.0", lifespan=lifespan)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # CORS
 app.add_middleware(
@@ -295,11 +303,12 @@ async def chat(request: ChatRequest, user_id: str = Depends(get_current_user)):
 
 
 @app.post("/api/session/stream_chat")
-async def stream_chat(request: ChatRequest, user_id: str = Depends(get_current_user)):
+@limiter.limit("20/minute")
+async def stream_chat(request: Request, payload: ChatRequest, user_id: str = Depends(get_current_user)):
     """Process student message and stream tokens back natively via SSE (No Threading)."""
-    if not request.session_id.startswith(f"{user_id}_"):
+    if not payload.session_id.startswith(f"{user_id}_"):
         raise HTTPException(status_code=403, detail="Unauthorized access to session")
-    session_id = request.session_id
+    session_id = payload.session_id
     config = {
         "configurable": {
             "thread_id": session_id,
@@ -320,7 +329,7 @@ async def stream_chat(request: ChatRequest, user_id: str = Depends(get_current_u
 
     msg = ChatMessage(
         role=MessageRole.STUDENT,
-        content=request.message,
+        content=payload.message,
         metadata={"turn": current_state.get("turn_count", 0)}
     )
     input_update = {
@@ -350,7 +359,7 @@ async def stream_chat(request: ChatRequest, user_id: str = Depends(get_current_u
                         patient_reply = m.content
                         break
                 # Safely enqueue to ARQ Redis worker
-                await app.state.arq_pool.enqueue_job("generate_title_task", session_id, request.message, patient_reply)
+                await app.state.arq_pool.enqueue_job("generate_title_task", session_id, payload.message, patient_reply)
 
             note = result.get("professor_notes", [])[-1] if result.get("professor_notes") else None
             phase_val = result["phase"].value if hasattr(result["phase"], "value") else result["phase"]
@@ -369,11 +378,12 @@ async def stream_chat(request: ChatRequest, user_id: str = Depends(get_current_u
 
 
 @app.post("/api/session/end", response_model=GradeResponse)
-async def end_session(request: GradeRequest, user_id: str = Depends(get_current_user)):
+@limiter.limit("5/minute")
+async def end_session(request: Request, payload: GradeRequest, user_id: str = Depends(get_current_user)):
     """End session asynchronously and persist grade."""
-    if not request.session_id.startswith(f"{user_id}_"):
+    if not payload.session_id.startswith(f"{user_id}_"):
         raise HTTPException(status_code=403, detail="Unauthorized access to session")
-    config = {"configurable": {"thread_id": request.session_id}}
+    config = {"configurable": {"thread_id": payload.session_id}}
     
     try:
         # Get state snapshot
@@ -396,12 +406,12 @@ async def end_session(request: GradeRequest, user_id: str = Depends(get_current_
         # Sync to UI table
         from psychtrainer.workflow.prompt_registry import supabase
         try:
-            supabase.table("sessions").update({"is_ended": True}).eq("id", request.session_id).execute()
+            supabase.table("sessions").update({"is_ended": True}).eq("id", payload.session_id).execute()
         except Exception as e:
             logger.error(f"Failed to flag Supabase UI session as ended: {e}")
 
     return GradeResponse(
-        session_id=request.session_id,
+        session_id=payload.session_id,
         report=state["grade_report"],
     )
 
