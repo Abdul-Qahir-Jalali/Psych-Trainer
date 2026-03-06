@@ -57,6 +57,13 @@ async def init_pgvector_db(pool_or_uri: str | AsyncConnectionPool):
                 ON document_embeddings (collection_name);
                 """
             )
+            # Create a GIN index on text for full-text keyword search
+            await conn.execute(
+                """
+                CREATE INDEX IF NOT EXISTS document_embeddings_text_idx 
+                ON document_embeddings USING GIN (to_tsvector('english', text));
+                """
+            )
             logger.info("pgvector_db_initialized", table="document_embeddings")
     except Exception as e:
         logger.error("pgvector_init_failed", error=str(e))

@@ -43,7 +43,7 @@ class PGRetriever:
             self._pool_ready = True
 
     async def search(self, query: str, collection_name: str, limit: int = 3) -> str:
-        """Search a collection using PGVector Cosine Distance + CrossEncoder Reranking."""
+        """Search a collection using PGVector Cosine Distance + Native FTS Keyword Search + CrossEncoder Reranking."""
         await self._ensure_pool()
         loop = asyncio.get_running_loop()
 
@@ -56,21 +56,37 @@ class PGRetriever:
         try:
             async with self.pool.connection() as conn:
                 async with conn.cursor() as cur:
-                    # We query the document_embeddings table created during ingestion
+                    # Execute Hybrid Search (Vector Cosine + Native Full Text Search) with RRF
                     await cur.execute(
                         """
-                        SELECT text 
-                        FROM document_embeddings 
-                        WHERE collection_name = %s
-                        ORDER BY embedding <=> %s::vector
-                        LIMIT 20
+                        WITH semantic_search AS (
+                            SELECT text, ROW_NUMBER() OVER (ORDER BY embedding <=> %s::vector) AS rank
+                            FROM document_embeddings 
+                            WHERE collection_name = %s 
+                            LIMIT 20
+                        ),
+                        keyword_search AS (
+                            SELECT text, ROW_NUMBER() OVER (
+                                ORDER BY ts_rank(to_tsvector('english', text), websearch_to_tsquery('english', %s)) DESC
+                            ) AS rank
+                            FROM document_embeddings
+                            WHERE collection_name = %s 
+                              AND to_tsvector('english', text) @@ websearch_to_tsquery('english', %s)
+                            LIMIT 20
+                        )
+                        SELECT COALESCE(ss.text, ks.text) AS merged_text,
+                               (COALESCE(1.0 / (60 + ss.rank), 0.0) + COALESCE(1.0 / (60 + ks.rank), 0.0)) AS rrf_score
+                        FROM semantic_search ss
+                        FULL OUTER JOIN keyword_search ks ON ss.text = ks.text
+                        ORDER BY rrf_score DESC
+                        LIMIT 20;
                         """,
-                        (collection_name, str(dense_vector))
+                        (str(dense_vector), collection_name, query, collection_name, query)
                     )
                     rows = await cur.fetchall()
                     chunks = [row[0] for row in rows]
         except Exception as e:
-            logger.error("pgvector_search_failed", error=str(e), collection=collection_name)
+            logger.error("pgvector_hybrid_search_failed", error=str(e), collection=collection_name)
             return ""
 
         if not chunks:
