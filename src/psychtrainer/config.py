@@ -68,6 +68,7 @@ class Settings(BaseSettings):
     redis_uri: str = ""
 
     # ── RAG ──────────────────────────────────────────────
+    vector_store: str = "pgvector"  # 'pgvector' or 'qdrant'
     chunk_size: int = 500
     chunk_overlap: int = 80
     top_k: int = 5

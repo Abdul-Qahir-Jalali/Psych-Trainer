@@ -22,6 +22,7 @@ from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from psychtrainer.config import settings
 from psychtrainer.workflow.graph import build_workflow
 from psychtrainer.rag.knowledge import Retriever
+from psychtrainer.rag.pg_knowledge import PGRetriever
 
 setup_logger()
 logger = structlog.get_logger(__name__)
@@ -78,7 +79,10 @@ async def startup(ctx: dict[str, Any]) -> None:
     await checkpointer.asetup()
     
     # 2. Rebuild workflow
-    retriever = Retriever()
+    if settings.vector_store == "pgvector":
+        retriever = PGRetriever()
+    else:
+        retriever = Retriever()
     workflow = build_workflow(retriever, checkpointer=checkpointer)
     ctx["workflow"] = workflow
     

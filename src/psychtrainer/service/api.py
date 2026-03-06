@@ -37,6 +37,7 @@ from psychtrainer.agents.professor import generate_final_grade
 from psychtrainer.config import settings
 from psychtrainer.rag.ingest import load_few_shot_examples
 from psychtrainer.rag.knowledge import Retriever
+from psychtrainer.rag.pg_knowledge import PGRetriever
 from psychtrainer.service.schema import (
     ChatRequest,
     ChatResponse,
@@ -110,7 +111,13 @@ async def lifespan(app: FastAPI):
         logger.info("LangSmith tracing is disabled.")
 
     # 3. RAG & Workflow
-    retriever = Retriever()
+    if settings.vector_store == "pgvector":
+        retriever = PGRetriever()
+        logger.info("Using PGVector for vector search.")
+    else:
+        retriever = Retriever()
+        logger.info("Using Qdrant for vector search.")
+        
     examples = load_few_shot_examples()
     workflow = build_workflow(retriever, checkpointer=checkpointer)
     

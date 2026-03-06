@@ -8,6 +8,7 @@ Usage:
 
 import sys
 from pathlib import Path
+import asyncio
 
 # Add src to path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
@@ -20,6 +21,7 @@ from psychtrainer.rag.ingest import (
     load_medqa,
     load_pdf,
 )
+from psychtrainer.rag.pg_ingest import index_chunks_pg
 from psychtrainer.logger_setup import setup_logger
 
 import structlog
@@ -28,46 +30,62 @@ setup_logger()
 logger = structlog.get_logger(__name__)
 
 
-def main():
+async def main():
     logger.info("═" * 60)
     logger.info("  🧠 PsychTrainer — Component Architecture Ingestion")
     logger.info("═" * 60)
 
+    use_pg = settings.vector_store == "pgvector"
+    logger.info("   Target Vector Store: %s", "PGVector" if use_pg else "Qdrant")
+
     # Shared resources
-    client = get_qdrant_client()
+    if not use_pg:
+        client = get_qdrant_client()
     model = get_embedding_model()
 
     # ── 1. OSCE Patient Script ──
     logger.info("\n📄 Loading OSCE Patient Script...")
     osce_chunks = load_pdf(settings.osce_pdf, "patient_script")
     logger.info("   Extracted %d chunks from OSCE PDF", len(osce_chunks))
-    count = index_chunks(osce_chunks, "patient_script", client=client, model=model)
+    if use_pg:
+        count = await index_chunks_pg(osce_chunks, "patient_script", settings.postgres_uri, model)
+    else:
+        count = index_chunks(osce_chunks, "patient_script", client=client, model=model)
     logger.info("   ✓ Indexed %d chunks into 'patient_script'", count)
 
     # ── 2. Depression Toolkit ──
     logger.info("\n📄 Loading Depression Screening Toolkit...")
     toolkit_chunks = load_pdf(settings.depression_toolkit_pdf, "grading_rubric")
     logger.info("   Extracted %d chunks from Toolkit PDF", len(toolkit_chunks))
-    count = index_chunks(toolkit_chunks, "grading_rubric", client=client, model=model)
+    if use_pg:
+        count = await index_chunks_pg(toolkit_chunks, "grading_rubric", settings.postgres_uri, model)
+    else:
+        count = index_chunks(toolkit_chunks, "grading_rubric", client=client, model=model)
     logger.info("   ✓ Indexed %d chunks into 'grading_rubric'", count)
 
     # ── 3. MedQA Knowledge Base ──
     logger.info("\n📋 Loading MedQA JSONL...")
     medqa_chunks = load_medqa()
     logger.info("   Extracted %d chunks from MedQA", len(medqa_chunks))
-    count = index_chunks(medqa_chunks, "medical_knowledge", client=client, model=model)
+    if use_pg:
+        count = await index_chunks_pg(medqa_chunks, "medical_knowledge", settings.postgres_uri, model)
+    else:
+        count = index_chunks(medqa_chunks, "medical_knowledge", client=client, model=model)
     logger.info("   ✓ Indexed %d chunks into 'medical_knowledge'", count)
 
     # ── Summary ──
     logger.info("\n" + "═" * 60)
-    collections = client.get_collections().collections
-    for col in collections:
-        info = client.get_collection(col.name)
-        logger.info("   Collection '%s': %d points", col.name, info.points_count)
+    if not use_pg:
+        collections = client.get_collections().collections
+        for col in collections:
+            info = client.get_collection(col.name)
+            logger.info("   Collection '%s': %d points", col.name, info.points_count)
     logger.info("═" * 60)
     logger.info("  ✅ Data ingestion complete!")
     logger.info("═" * 60)
 
 
 if __name__ == "__main__":
-    main()
+    if sys.platform == "win32":
+        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+    asyncio.run(main())

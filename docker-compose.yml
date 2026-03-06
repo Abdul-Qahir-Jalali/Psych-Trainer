@@ -44,7 +44,7 @@ services:
       - redis_data:/data
 
   postgres:
-    image: postgres:15-alpine
+    image: pgvector/pgvector:pg15
     environment:
       - POSTGRES_USER=psych_admin
       - POSTGRES_PASSWORD=psych_password
