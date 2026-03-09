@@ -18,11 +18,13 @@ logger = structlog.get_logger(__name__)
 class CloudEmbedder:
     """Handles vector embedding math through litellm API Routing or Local Fallback."""
     def __init__(self):
-         # If no API keys are provided, we'll instantiate fastembed as the ultimate fallback.
+         # If no API keys are provided, we'll instantiate fastembed as the ultimate local fallback.
+         # CRITICAL: We DO NOT fallback dynamically during runtime. If a cloud key is present,
+         # we strictly stick to it to prevent DB vector dimensionality corruption.
          self._local_model = None
-         self.has_cloud = bool(settings.cohere_api_key or settings.gemini_api_key)
+         self.has_cloud = bool(settings.cohere_api_key)
          if not self.has_cloud:
-             logger.info("Initializing Local fastembed due to missing Cloud keys.")
+             logger.info("Initializing Local fastembed (384d) due to missing Cloud keys.")
              self._local_model = TextEmbedding(settings.embedding_model)
     
     async def embed_texts(self, texts: List[str]) -> List[List[float]]:
@@ -35,36 +37,23 @@ class CloudEmbedder:
             loop = asyncio.get_running_loop()
             return await loop.run_in_executor(None, lambda: list(self._local_model.embed(texts)))
 
-        # 2. Setup LiteLLM fallback chains based on available keys
-        fallbacks = []
-        model = ""
-        
-        if settings.cohere_api_key:
-            model = "cohere/embed-english-v3.0"
-            if settings.gemini_api_key:
-                fallbacks.append({"model": "gemini/text-embedding-004"})
-        elif settings.gemini_api_key:
-            model = "gemini/text-embedding-004"
+        # 2. Strict Single-Provider Cloud Route
+        model = "cohere/embed-english-v3.0"
             
         try:
-            # We must pass the Cohere/Gemini explicit input_type wrapper parameters
-            # LiteLLM allows `input_type` forwarding for Cohere V3 requirements
+            # We strictly enforce Cohere without fallbacks to prevent inserting 768d Gemini vectors 
+            # into a 1024d Cohere database, which breaks RAG retrieval and crashes Postgres.
             response = await aembedding(
                 model=model,
                 input=texts,
-                fallbacks=fallbacks,
-                input_type="search_document" if "cohere" in model else None
+                input_type="search_document"
             )
             
             # The API response returns a list of data objects with .embedding floats
             return [data['embedding'] for data in response['data']]
         except Exception as e:
-            logger.error("Cloud embedding failed entirely. Falling back to Local CPU.", error=str(e))
-            # 3. Double-safety local instantiation in case of complete internet outage
-            if not self._local_model:
-                self._local_model = TextEmbedding(settings.embedding_model)
-            loop = asyncio.get_running_loop()
-            return await loop.run_in_executor(None, lambda: [emb.tolist() for emb in self._local_model.embed(texts)])
+            logger.error("Cohere embedding API failed. Fatal error to prevent vector corruption.", error=str(e))
+            raise e
 
 class CloudReranker:
     """Handles Cross-Encoder logic. Cohere provides an industry standard Reranking API."""

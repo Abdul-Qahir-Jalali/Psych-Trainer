@@ -35,8 +35,10 @@ class Settings(BaseSettings):
     llm_model: str = "groq/llama-3.3-70b-versatile"
 
     # ── Embeddings ───────────────────────────────────────
-    embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
-    embedding_dimension: int = 384  # MiniLM-L6-v2 output dim
+    # We strictly use Cohere for external embeddings to prevent dimensional fallback corruption.
+    # If no keys are provided, system falls back to fastembed/all-MiniLM-L6-v2 (384d).
+    embedding_model: str = "cohere/embed-english-v3.0"
+    embedding_dimension: int = 1024  # Cohere embed-v3.0 output dim (MiniLM fallback uses 384)
     sparse_embedding_model: str = "Qdrant/bm25"
     cross_encoder_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
     
