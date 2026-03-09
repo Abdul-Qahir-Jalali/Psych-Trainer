@@ -22,6 +22,7 @@ from psychtrainer.rag.ingest import (
     load_pdf,
 )
 from psychtrainer.rag.pg_ingest import index_chunks_pg
+from psychtrainer.rag.cloud_inference import CloudEmbedder
 from psychtrainer.logger_setup import setup_logger
 
 import structlog
@@ -39,9 +40,11 @@ async def main():
     logger.info("   Target Vector Store: %s", "PGVector" if use_pg else "Qdrant")
 
     # Shared resources
-    if not use_pg:
+    if use_pg:
+        model = CloudEmbedder()
+    else:
         client = get_qdrant_client()
-    model = get_embedding_model()
+        model = get_embedding_model()
 
     # ── 1. OSCE Patient Script ──
     logger.info("\n📄 Loading OSCE Patient Script...")

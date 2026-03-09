@@ -14,12 +14,11 @@ from __future__ import annotations
 import asyncio
 import json
 import structlog
-from fastembed import TextEmbedding
-from sentence_transformers import CrossEncoder
 from psycopg_pool import AsyncConnectionPool
 from pgvector.psycopg import register_vector_async
 
 from psychtrainer.config import settings
+from psychtrainer.rag.cloud_inference import CloudEmbedder, CloudReranker
 
 logger = structlog.get_logger(__name__)
 
@@ -30,8 +29,8 @@ class PGRetriever:
         self.pool_uri = settings.postgres_uri
         # Initialize an async pool. We open it lazily on first query.
         self.pool = AsyncConnectionPool(conninfo=self.pool_uri, min_size=1, max_size=10, open=False)
-        self.model = TextEmbedding(settings.embedding_model)
-        self.cross_encoder = CrossEncoder(settings.cross_encoder_model)
+        self.embedder = CloudEmbedder()
+        self.reranker = CloudReranker()
         self._pool_ready = False
 
     async def _ensure_pool(self):
@@ -45,12 +44,10 @@ class PGRetriever:
     async def search(self, query: str, collection_name: str, limit: int = 3) -> str:
         """Search a collection using PGVector Cosine Distance + Native FTS Keyword Search + CrossEncoder Reranking."""
         await self._ensure_pool()
-        loop = asyncio.get_running_loop()
-
-        def _embed_query():
-            return list(self.model.embed([query]))[0].tolist()
-
-        dense_vector = await loop.run_in_executor(None, _embed_query)
+        
+        # Await async cloud embeddings mapping
+        embedding_responses = await self.embedder.embed_texts([query])
+        dense_vector = embedding_responses[0]
 
         chunks = []
         try:
@@ -92,13 +89,9 @@ class PGRetriever:
         if not chunks:
             return ""
 
-        def _rerank():
-            pairs = [[query, chunk] for chunk in chunks]
-            scores = self.cross_encoder.predict(pairs)
-            scored = sorted(zip(scores, chunks), key=lambda x: x[0], reverse=True)
-            return "\n---\n".join([chunk for score, chunk in scored[:limit]])
-
-        return await loop.run_in_executor(None, _rerank)
+        # Delegate top_k chunks for High Accuracy Reranking through our Cloud engine
+        rescored_docs = await self.reranker.rerank(query=query, documents=chunks, top_n=limit)
+        return "\n---\n".join(rescored_docs)
 
     async def get_patient_context(self, query: str) -> str:
         """Find relevant lines from the OSCE script."""

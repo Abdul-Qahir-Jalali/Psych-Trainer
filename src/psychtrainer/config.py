@@ -39,6 +39,10 @@ class Settings(BaseSettings):
     embedding_dimension: int = 384  # MiniLM-L6-v2 output dim
     sparse_embedding_model: str = "Qdrant/bm25"
     cross_encoder_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+    
+    # ── Cloud Inference Routing ──────────────────────────
+    cohere_api_key: str = ""
+    gemini_api_key: str = ""
 
     # ── Qdrant ───────────────────────────────────────────
     qdrant_path: str = str(PROJECT_ROOT / "qdrant_storage")

@@ -14,10 +14,10 @@ import structlog
 from typing import Any
 from psycopg_pool import AsyncConnectionPool
 from pgvector.psycopg import register_vector_async
-from fastembed import TextEmbedding
 
 from psychtrainer.config import settings
 from psychtrainer.rag.ingest import TextChunk
+from psychtrainer.rag.cloud_inference import CloudEmbedder
 
 logger = structlog.get_logger(__name__)
 
@@ -76,7 +76,7 @@ async def index_chunks_pg(
     chunks: list[TextChunk],
     collection_name: str,
     pool_uri: str,
-    model: TextEmbedding,
+    model: CloudEmbedder,
 ) -> int:
     """Embed chunks and insert them into PostgreSQL."""
     
@@ -88,9 +88,8 @@ async def index_chunks_pg(
         
         texts = [c.text for c in chunks]
         
-        # We wrap in run_in_executor to avoid blocking event loop
-        loop = asyncio.get_running_loop()
-        dense_embeddings = await loop.run_in_executor(None, lambda: list(model.embed(texts)))
+        # We heavily offload embedding calculation to the Cloud Fallback Router
+        dense_embeddings = await model.embed_texts(texts)
         
         total_inserted = 0
         
@@ -108,7 +107,7 @@ async def index_chunks_pg(
                     batch_embs = dense_embeddings[i: i + batch_size]
                     
                     data_to_insert = [
-                        (collection_name, chunk.text, json.dumps(chunk.metadata), emb.tolist())
+                        (collection_name, chunk.text, json.dumps(chunk.metadata), emb)
                         for chunk, emb in zip(batch_chunks, batch_embs)
                     ]
                     
