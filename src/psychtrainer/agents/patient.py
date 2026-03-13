@@ -8,31 +8,24 @@ It combines the system prompt (persona) with the RAG + LLM execution logic.
 from __future__ import annotations
 
 import structlog
-import litellm
+
+from langchain_community.chat_models import ChatLiteLLM
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_core.runnables import RunnableConfig
-from tenacity import retry, stop_after_attempt, wait_exponential
 
 from psychtrainer.config import settings
 from psychtrainer.rag.knowledge import Retriever
 from psychtrainer.workflow.state import ChatMessage, MessageRole, Phase, SimulationState
-from psychtrainer.workflow.prompt_registry import get_system_prompt
 
 logger = structlog.get_logger(__name__)
 
+from psychtrainer.workflow.prompt_registry import get_system_prompt
+from tenacity import retry, stop_after_attempt, wait_exponential
 
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10), reraise=True)
-async def _invoke_llm_with_retry(messages: list) -> str:
+async def _invoke_llm_with_retry(llm: ChatLiteLLM, lc_messages: list, config: RunnableConfig):
     """Executes the LLM with enterprise algebraic fallback (exponential backoff)."""
-    response = await litellm.acompletion(
-        model=settings.llm_model,
-        messages=messages,
-        temperature=0.7,
-        max_tokens=150,
-        api_key=settings.groq_api_key,
-    )
-    return response.choices[0].message.content.strip()
-
+    return await llm.ainvoke(lc_messages, config)
 
 # ── The Agent Logic ──────────────────────────────────────────────
 
@@ -55,9 +48,10 @@ async def patient_node(state: SimulationState, config: RunnableConfig, retriever
         patient_context = ""
         medical_context = ""
 
-    # 2. Build Prompt — Fetch dynamic registry prompt asynchronously
+    # 2. Build Prompt
+    # FETCH DYNAMIC REGISTRY PROMPT asynchronously
     base_prompt_template = await get_system_prompt("patient_persona")
-
+    
     system_prompt = base_prompt_template.format(
         patient_context=patient_context,
         medical_context=medical_context,
@@ -66,14 +60,23 @@ async def patient_node(state: SimulationState, config: RunnableConfig, retriever
         summary=state.get("summary", "None available yet."),
     )
 
-    # 3. Build litellm-compatible message list (same format as professor.py)
-    lc_messages = [{"role": "system", "content": system_prompt}]
+    lc_messages = [SystemMessage(content=system_prompt)]
     for msg in state["messages"]:
-        role = "assistant" if msg.role == MessageRole.PATIENT else "user"
-        lc_messages.append({"role": role, "content": msg.content})
+        if msg.role == MessageRole.PATIENT:
+            lc_messages.append(AIMessage(content=msg.content))
+        else:
+            lc_messages.append(HumanMessage(content=msg.content))
+
+    llm = ChatLiteLLM(
+        model=settings.llm_model,
+        temperature=0.7,
+        max_tokens=150,
+        api_key=settings.groq_api_key,
+    )
 
     try:
-        content = await _invoke_llm_with_retry(lc_messages)
+        response = await _invoke_llm_with_retry(llm, lc_messages, config)
+        content = response.content
     except Exception as e:
         logger.error(f"Patient LLM error exhausted all retries: {e}")
         raise e  # Fail-fast to trigger HTTP 500 error on the frontend
