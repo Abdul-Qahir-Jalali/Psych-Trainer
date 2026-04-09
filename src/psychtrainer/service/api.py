@@ -94,9 +94,11 @@ async def lifespan(app: FastAPI):
     
     # 1. Database Connection
     # Uses psycopg async connection pool for high-concurrency connections
-    pool = AsyncConnectionPool(conninfo=settings.postgres_uri)
+    pool = AsyncConnectionPool(conninfo=settings.postgres_uri, kwargs={"autocommit": True}, open=False)
+    await pool.open()
+    
     checkpointer = AsyncPostgresSaver(pool)
-    await checkpointer.asetup() # Automatically creates all LangGraph tables securely
+    await checkpointer.setup() # Automatically creates all LangGraph tables securely
     
     # 1b. Rate Limiting (Redis)
     redis_client = redis.from_url(settings.redis_uri, encoding="utf8", decode_responses=True)

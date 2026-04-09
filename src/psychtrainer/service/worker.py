@@ -72,11 +72,12 @@ async def startup(ctx: dict[str, Any]) -> None:
     logger.info("Initializing ARQ Worker Node...")
     
     # 1. Database Connection
-    pool = AsyncConnectionPool(conninfo=settings.postgres_uri)
+    pool = AsyncConnectionPool(conninfo=settings.postgres_uri, kwargs={"autocommit": True}, open=False)
+    await pool.open()
     ctx["pool"] = pool
     
     checkpointer = AsyncPostgresSaver(pool)
-    await checkpointer.asetup()
+    await checkpointer.setup()
     
     # 2. Rebuild workflow
     if settings.vector_store == "pgvector":
