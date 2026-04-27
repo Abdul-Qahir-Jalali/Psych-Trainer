@@ -23,6 +23,11 @@ from psychtrainer.config import settings
 from psychtrainer.workflow.graph import build_workflow
 from psychtrainer.rag.knowledge import Retriever
 from psychtrainer.rag.pg_knowledge import PGRetriever
+import sys
+import asyncio
+if sys.platform == 'win32':
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
 
 setup_logger()
 logger = structlog.get_logger(__name__)

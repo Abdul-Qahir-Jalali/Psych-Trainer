@@ -1,10 +1,19 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { supabase } from './lib/supabase';
 import { AuthScreen } from './components/AuthScreen';
 import { Sidebar } from './components/Sidebar';
 import { ChatPanel } from './components/ChatPanel';
 import { EvaluationPanel } from './components/EvaluationPanel';
 import { useStore } from './store/useStore';
+const PATIENTS = [
+    {
+        id: 1,
+        name: "James",
+        age: 21,
+        headline: "Obsessive-Compulsive Disorder (OCD)",
+        description: "James is a college student struggling with severe contamination fears. He washes his hands 30+ times a day and avoids public transport. He presents as highly anxious, intelligent, but severely distressed by intrusive thoughts and constantly seeks reassurance."
+    }
+];
 
 function App() {
     const sessionToken = useStore(state => state.sessionToken);
@@ -22,11 +31,19 @@ function App() {
     const currentSessionId = useStore(state => state.currentSessionId);
     const handleLogout = useStore(state => state.handleLogout);
     const handleStartSession = useStore(state => state.handleStartSession);
+    const [selectedPatientId, setSelectedPatientId] = useState<number | null>(null);
 
     // --- Authentication ---
     useEffect(() => {
-        supabase.auth.getSession().then(({ data: { session } }) => {
-            setSessionToken(session?.access_token || null);
+        supabase.auth.getUser().then(({ data: { user }, error }) => {
+            if (error || !user) {
+                supabase.auth.signOut();
+                setSessionToken(null);
+            } else {
+                supabase.auth.getSession().then(({ data: { session } }) => {
+                    setSessionToken(session?.access_token || null);
+                });
+            }
         });
 
         const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
@@ -36,6 +53,7 @@ function App() {
         return () => subscription.unsubscribe();
     }, [setSessionToken]);
 
+
     // --- Initial Load ---
     useEffect(() => {
         if (sessionToken) {
@@ -44,6 +62,19 @@ function App() {
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [sessionToken]);
+    // --- Keyboard Shortcuts ---
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            // Listen for Ctrl + Shift + S
+            if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 's') {
+                e.preventDefault(); // Prevent the browser from trying to save the page
+                setIsSidebarOpen(!isSidebarOpen);
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [isSidebarOpen, setIsSidebarOpen]);
 
     if (!sessionToken) {
         return <AuthScreen />;
@@ -73,14 +104,6 @@ function App() {
                         <span className="phase-dot"></span>
                         <span id="phase-label">{phase.toUpperCase()}</span>
                     </div>
-                    <div className="turn-counter">Turn {turnCount}</div>
-                    <button className="btn-header-icon" onClick={handleLogout} title="Log out" style={{marginLeft: '12px'}}>
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
-                            <polyline points="16 17 21 12 16 7"></polyline>
-                            <line x1="21" y1="12" x2="9" y2="12"></line>
-                        </svg>
-                    </button>
                 </div>
             </header>
 
@@ -94,16 +117,63 @@ function App() {
                     <button className={`mobile-tab ${mobileTab === 'eval' ? 'active' : ''}`} onClick={() => setMobileTab('eval')}>📊 Evaluation</button>
                 </div>
 
-                {!currentSessionId ? (
-                    <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-card)'}}>
-                        <div style={{ textAlign: 'center'}}>
-                            <h2 style={{ marginBottom: '1rem'}}>Ready for a new patient?</h2>
-                            <button className="btn-primary" onClick={handleStartSession} disabled={isWaiting}>
-                                {isWaiting ? 'Starting...' : '▶ Begin Session'}
-                            </button>
+                            {!currentSessionId ? (
+                    <div style={{ flex: 1, padding: '40px 20px', overflowY: 'auto', background: 'var(--bg-main)' }}>
+                        <div style={{ maxWidth: '750px', margin: '0 auto' }}>
+                            <h2 style={{ marginBottom: '8px', fontSize: '28px', color: 'var(--text-primary)' }}>Select a Patient</h2>
+                            <p style={{ color: 'var(--text-secondary)', marginBottom: '32px', fontSize: '16px' }}>Choose a patient profile below to review their details and begin your clinical simulation.</p>
+                            
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                                {PATIENTS.map(patient => (
+                                    <div key={patient.id} style={{ 
+                                        backgroundColor: 'var(--bg-card)', 
+                                        border: `2px solid ${selectedPatientId === patient.id ? 'var(--accent-primary)' : 'var(--border)'}`,
+                                        borderRadius: 'var(--radius-lg)',
+                                        padding: '24px',
+                                        cursor: 'pointer',
+                                        transition: 'all 0.2s ease',
+                                        boxShadow: selectedPatientId === patient.id ? '0 8px 24px rgba(0,149,255,0.12)' : '0 2px 8px rgba(0,0,0,0.03)'
+                                    }} onClick={() => setSelectedPatientId(selectedPatientId === patient.id ? null : patient.id)}>
+                                        
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                            <div>
+                                                <h3 style={{ margin: '0 0 6px 0', fontSize: '20px', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                    {patient.name} <span style={{ fontSize: '14px', fontWeight: 'normal', color: 'var(--text-muted)' }}>• {patient.age} yrs</span>
+                                                </h3>
+                                                <div style={{ color: 'var(--accent-primary)', fontWeight: 600, fontSize: '15px' }}>{patient.headline}</div>
+                                            </div>
+                                            
+                                            {selectedPatientId !== patient.id ? (
+                                                <span style={{ color: 'var(--text-muted)', fontSize: '14px', fontWeight: 500 }}>Click to view details ↓</span>
+                                            ) : (
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
+                                                    <span 
+                                                        style={{ color: 'var(--text-muted)', fontSize: '14px', fontWeight: 500, cursor: 'pointer' }} 
+                                                        onClick={(e) => { e.stopPropagation(); setSelectedPatientId(null); }}
+                                                    >
+                                                        Hide details ↑
+                                                    </span>
+                                                    <button className="btn-primary" onClick={(e) => { e.stopPropagation(); handleStartSession(); }} disabled={isWaiting} style={{ padding: '10px 20px', fontSize: '15px' }}>
+                                                        {isWaiting ? 'Starting...' : '▶ Begin Session'}
+                                                    </button>
+                                                </div>
+                                            )}
+
+                                        </div>
+                                        
+                                        {selectedPatientId === patient.id && (
+                                            <div style={{ marginTop: '20px', paddingTop: '16px', borderTop: '1px solid var(--border)', color: 'var(--text-secondary)', lineHeight: '1.6', fontSize: '15px' }}>
+                                                <strong style={{ color: 'var(--text-primary)' }}>Clinical Background:</strong><br/>
+                                                <span style={{ display: 'inline-block', marginTop: '6px' }}>{patient.description}</span>
+                                            </div>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
                         </div>
                     </div>
                 ) : (
+
                     <>
                         <ChatPanel />
                         <EvaluationPanel />
