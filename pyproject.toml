@@ -60,10 +60,16 @@ filterwarnings = [
 # Force the CPU-only version of Machine Learning libraries to save 4GB of disk space
 [[tool.uv.index]]
 name = "pytorch-cpu"
-url = "https://download.pytorch.org/whl/cpu"
+url = "https://download.pytorch.org/whl/cpu/"
 explicit = true
 
 [tool.uv.sources]
-torch = { index = "pytorch-cpu" }
-torchvision = { index = "pytorch-cpu" }
-torchaudio = { index = "pytorch-cpu" }
+torch = [
+  { index = "pytorch-cpu", marker = "sys_platform == 'linux'" }
+]
+torchvision = [
+  { index = "pytorch-cpu", marker = "sys_platform == 'linux'" }
+]
+torchaudio = [
+  { index = "pytorch-cpu", marker = "sys_platform == 'linux'" }
+]
