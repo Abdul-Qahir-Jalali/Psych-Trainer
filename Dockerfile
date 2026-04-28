@@ -31,7 +31,7 @@ WORKDIR /app
 COPY --from=ghcr.io/astral-sh/uv:0.5.4 /uv /bin/uv
 
 # Copy Python dependencies first (caching layer)
-COPY pyproject.toml README.md ./
+COPY pyproject.toml uv.lock README.md ./
 # Sync dependencies (--no-dev prevents downloading pytest/mocking tools in production)
 RUN uv sync --no-dev --no-install-project
 
