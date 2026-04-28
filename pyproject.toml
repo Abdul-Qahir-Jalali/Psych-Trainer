@@ -65,14 +65,5 @@ explicit = true
 
 [tool.uv.sources]
 torch = { index = "pytorch-cpu" }
-# Force the CPU-only version of Machine Learning libraries to save 4GB of disk space
-[[tool.uv.index]]
-name = "pytorch-cpu"
-url = "https://download.pytorch.org/whl/cpu"
-explicit = true
-
-[tool.uv.sources]
-torch = { index = "pytorch-cpu" }
 torchvision = { index = "pytorch-cpu" }
 torchaudio = { index = "pytorch-cpu" }
-
