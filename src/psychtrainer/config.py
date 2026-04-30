@@ -69,6 +69,7 @@ class Settings(BaseSettings):
     supabase_url: str = ""
     supabase_anon_key: str = ""
     supabase_jwt_secret: str = ""
+    supabase_service_role_key: str = ""
 
     # ── Rate Limiting ────────────────────────────────────
     redis_uri: str = ""

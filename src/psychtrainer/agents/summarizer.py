@@ -55,7 +55,7 @@ def summarize_conversation_node(state: SimulationState) -> dict:
     messages_to_keep = messages[split_index:]
 
     convo_text = "\n".join(
-        f"{m.role.value.upper()}: {m.content}" for m in messages_to_summarize
+        f"{(m.role.value if hasattr(m.role, 'value') else m.role).upper()}: {m.content}" for m in messages_to_summarize
     )
     
     prompt = SUMMARIZER_PROMPT.format(

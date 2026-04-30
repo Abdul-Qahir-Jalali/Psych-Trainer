@@ -158,7 +158,10 @@ export const useStore = create<StoreState>((set, get) => ({
                 },
                 body: JSON.stringify({})
             });
-            if (!res.ok) throw new Error('Failed to start session');
+                    if (!res.ok) {
+                const errData = await res.json().catch(() => ({}));
+                throw new Error(errData.detail || 'Failed to start session');
+            }
             const data = await res.json();
             
             set({
@@ -170,7 +173,10 @@ export const useStore = create<StoreState>((set, get) => ({
             await loadSessionsList();
         } catch (err: any) {
             console.error(err);
-            set((state) => ({ messages: [...state.messages, { role: 'system', content: `⚠️ Failed to start: ${err.message}` }] }));
+            set((state) => ({ 
+                messages: [...state.messages, { role: 'system', content: `⚠️ Failed to start: ${err.message}` }],
+                failedMessage: err.message
+            }));
         } finally {
             set({ isWaiting: false });
         }

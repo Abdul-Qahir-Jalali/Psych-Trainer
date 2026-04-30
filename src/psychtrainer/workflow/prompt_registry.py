@@ -19,7 +19,11 @@ logger = structlog.get_logger(__name__)
 pool = ConnectionPool.from_url(str(settings.redis_uri), decode_responses=True)
 redis_client = Redis(connection_pool=pool)
 
-supabase: Client = create_client(settings.supabase_url, settings.supabase_anon_key)
+supabase: Client = create_client(
+    settings.supabase_url, 
+    settings.supabase_service_role_key or settings.supabase_anon_key
+)
+
 
 async def get_system_prompt(role: str, ignore_cache: bool = False) -> str:
     """

@@ -55,7 +55,7 @@ async def patient_node(state: SimulationState, config: RunnableConfig, retriever
     system_prompt = base_prompt_template.format(
         patient_context=patient_context,
         medical_context=medical_context,
-        phase=phase.value,
+        phase=phase.value if hasattr(phase, "value") else phase,
         few_shot_examples=state.get("few_shot_examples", ""),
         summary=state.get("summary", "None available yet."),
     )
@@ -72,7 +72,9 @@ async def patient_node(state: SimulationState, config: RunnableConfig, retriever
         temperature=0.7,
         max_tokens=150,
         api_key=settings.groq_api_key,
+        streaming=True,
     )
+
 
     try:
         response = await _invoke_llm_with_retry(llm, lc_messages, config)

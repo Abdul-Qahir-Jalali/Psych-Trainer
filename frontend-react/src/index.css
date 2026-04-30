@@ -595,82 +595,74 @@ body {
   font-style: italic;
 }
 
-/* ── Input Bar ───────────────────────────────────────── */
+/* --- Modern ChatGPT-Style Input Bar --- */
 .input-bar {
-  flex-shrink: 0; /* Prevents being pushed off-screen */
-  padding: 16px 24px;
-  background: rgba(255, 255, 255, 0.8);
-  -webkit-backdrop-filter: blur(12px);
-  backdrop-filter: blur(12px);
-  border-top: 1px solid var(--border);
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.input-wrapper {
-  display: flex;
-  align-items: flex-end;
-  gap: 10px;
-  background: var(--bg-secondary);
+  flex-shrink: 0;
+  padding: 10px 14px;
+  margin: 0 auto 24px auto; /* Centers the bubble and lifts it off the bottom */
+  width: 90%;
+  max-width: 800px; /* ChatGPT standard width */
+  background: var(--bg-card);
   border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  padding: 8px 12px;
-  transition: var(--transition-smooth);
+  border-radius: 26px; /* Smooth pill shape */
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05), 0 2px 4px rgba(0, 0, 0, 0.03);
+  display: flex;
+  flex-direction: row; /* Places text box and button side-by-side */
+  align-items: flex-end;
+  gap: 12px;
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
 }
 
-.input-wrapper:focus-within {
+.input-bar:focus-within {
   border-color: var(--accent-primary);
-  box-shadow: 0 0 0 3px var(--accent-primary-glow);
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.08), 0 4px 8px rgba(0, 0, 0, 0.04);
 }
 
-.input-wrapper textarea {
+.input-bar textarea {
   flex: 1;
   background: transparent;
   border: none;
   outline: none;
   color: var(--text-primary);
   font-family: var(--font-sans);
-  font-size: 0.92rem;
+  font-size: 1rem;
   line-height: 1.5;
   resize: none;
-  max-height: 120px;
-  padding: 4px 0;
+  max-height: 200px;
+  padding: 8px 4px;
 }
 
-.input-wrapper textarea::placeholder {
+.input-bar textarea::placeholder {
   color: var(--text-muted);
 }
 
 .btn-send {
-  width: 38px;
-  height: 38px;
-  border-radius: 50%;
-  background: linear-gradient(
-    135deg,
-    var(--accent-primary),
-    var(--accent-secondary)
-  );
-  border: none;
-  color: white;
-  cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  flex-shrink: 0;
-  transition: var(--transition-fast);
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: none;
+  background-color: var(--accent-primary);
+  color: white;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-bottom: 2px; /* Aligns the button nicely with the text bottom */
 }
 
-.btn-send:hover {
+.btn-send:hover:not(:disabled) {
+  background-color: var(--accent-secondary);
   transform: scale(1.05);
-  box-shadow: 0 4px 12px var(--accent-primary-glow);
 }
 
 .btn-send:disabled {
-  opacity: 0.3;
+  background-color: var(--bg-glass);
+  color: var(--text-muted);
   cursor: not-allowed;
   transform: none;
 }
+
 
 .btn-end {
   padding: 10px 20px;

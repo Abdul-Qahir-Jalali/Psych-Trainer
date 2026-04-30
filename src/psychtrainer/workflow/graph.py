@@ -33,7 +33,7 @@ class RouterDecision(BaseModel):
 async def _router_node(state: SimulationState) -> dict:
     """Decides the next phase based on conversation history (asynchronously)."""
     messages = state["messages"]
-    current_phase = state["phase"]
+    current_phase = Phase(state["phase"]) if isinstance(state["phase"], str) else state["phase"]
     turn_count = state["turn_count"]
 
     # Hard limits
@@ -46,13 +46,13 @@ async def _router_node(state: SimulationState) -> dict:
 
     # Prepare prompt
     recent_messages = "\n".join(
-        f"{m.role.value.upper()}: {m.content}" for m in messages[-6:]
+        f"{(m.role.value if hasattr(m.role, 'value') else m.role).upper()}: {m.content}" for m in messages[-6:]
     )
     # Execute LLM to determine next phase using the DYNAMIC registry asynchronously
     base_prompt_template = await get_system_prompt("phase_router")
     prompt = base_prompt_template.format(
         recent_messages=recent_messages,
-        current_phase=current_phase.value,
+        current_phase=(current_phase.value if hasattr(current_phase, "value") else current_phase),
         turn_count=turn_count,
     )
 

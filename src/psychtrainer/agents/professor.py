@@ -85,7 +85,7 @@ async def professor_node(state: SimulationState, retriever: Retriever) -> dict:
         summary=state.get("summary", "None available yet.")
     )
     conversation_text = "\n".join(
-        f"{m.role.value.upper()}: {m.content}" for m in state["messages"]
+        f"{(m.role.value if hasattr(m.role, 'value') else m.role).upper()}: {m.content}" for m in state["messages"]
     )
     full_prompt = (
         f"{prompt}\n\nFULL CONVERSATION:\n{conversation_text}\n\n"
@@ -117,7 +117,7 @@ async def generate_final_grade(state: SimulationState) -> GradeReport:
     """
     notes = "\n".join(f"- {n}" for n in state.get("professor_notes", []))
     transcript = "\n".join(
-        f"{m.role.value.upper()}: {m.content}" for m in state["messages"]
+        f"{(m.role.value if hasattr(m.role, 'value') else m.role).upper()}: {m.content}" for m in state["messages"]
     )
 
     prompt = GRADING_FINAL_PROMPT.format(

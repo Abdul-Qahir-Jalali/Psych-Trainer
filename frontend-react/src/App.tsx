@@ -32,7 +32,7 @@ function App() {
     const handleLogout = useStore(state => state.handleLogout);
     const handleStartSession = useStore(state => state.handleStartSession);
     const [selectedPatientId, setSelectedPatientId] = useState<number | null>(null);
-
+    const failedMessage = useStore(state => state.failedMessage);
     // --- Authentication ---
     useEffect(() => {
         supabase.auth.getUser().then(({ data: { user }, error }) => {
@@ -122,7 +122,11 @@ function App() {
                         <div style={{ maxWidth: '750px', margin: '0 auto' }}>
                             <h2 style={{ marginBottom: '8px', fontSize: '28px', color: 'var(--text-primary)' }}>Select a Patient</h2>
                             <p style={{ color: 'var(--text-secondary)', marginBottom: '32px', fontSize: '16px' }}>Choose a patient profile below to review their details and begin your clinical simulation.</p>
-                            
+                            {failedMessage && (
+                                <div style={{ backgroundColor: '#ffebee', color: '#c62828', padding: '12px 16px', borderRadius: '8px', marginBottom: '24px', fontWeight: 500, border: '1px solid #ffcdd2' }}>
+                                    ⚠️ {failedMessage}
+                                </div>
+                            )}
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                                 {PATIENTS.map(patient => (
                                     <div key={patient.id} style={{ 

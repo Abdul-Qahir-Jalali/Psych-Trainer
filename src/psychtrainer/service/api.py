@@ -56,23 +56,21 @@ logger = structlog.get_logger(__name__)
 
 security = HTTPBearer()
 
-limiter = Limiter(key_func=lambda req: req.state.user_id if hasattr(req.state, "user_id") else get_remote_address(req))
+limiter = Limiter(key_func=get_remote_address)
 
 def get_current_user(request: Request, credentials: HTTPAuthorizationCredentials = Depends(security)) -> str:
-    """Cryptographically validates the Supabase JWT locally (Zero-Latency)."""
+    """Validates the Supabase JWT securely using the official client."""
     try:
-        # Avoid 500ms network round trips by doing the math locally
-        payload = jwt.decode(
-            credentials.credentials,
-            settings.supabase_jwt_secret,
-            algorithms=["HS256"],
-            audience="authenticated"
-        )
-        user_id = payload.get("sub")
-        if not user_id:
+        from psychtrainer.workflow.prompt_registry import supabase
+        user_resp = supabase.auth.get_user(credentials.credentials)
+        
+        if not user_resp or not user_resp.user:
             raise ValueError("JWT missing subject (user_id).")
-        request.state.user_id = user_id
-        return user_id
+            
+        request.state.user_id = user_resp.user.id
+        return user_resp.user.id
+
+
     except jwt.ExpiredSignatureError:
         logger.error("auth_failure", reason="Token expired")
         raise HTTPException(status_code=401, detail="Token expired")
@@ -285,7 +283,7 @@ async def chat(request: ChatRequest, user_id: str = Depends(get_current_user)):
     # Note: State update uses append semantics handled by SimulationState
     input_update = {
         "messages": [msg], 
-        "turn_count": current_state["turn_count"] + 1
+        "turn_count": current_state.get("turn_count", 0) + 1
     }
     
     result = await app.state.workflow.ainvoke(input_update, config)
@@ -345,8 +343,9 @@ async def stream_chat(request: Request, payload: ChatRequest, user_id: str = Dep
     )
     input_update = {
         "messages": [msg], 
-        "turn_count": current_state["turn_count"] + 1
+        "turn_count": current_state.get("turn_count", 0) + 1
     }
+
 
     # 2. Native Async Generator for SSE
     async def event_generator():
