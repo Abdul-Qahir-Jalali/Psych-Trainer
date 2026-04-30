@@ -61,56 +61,81 @@ export function ChatPanel() {
     };
 
     return (
-        <section className="chat-panel">
-            {messages.length === 0 && !currentStreamText && (
-                <div className="welcome-screen">
-                    <div className="welcome-content">
-                        <div className="welcome-icon">🩺</div>
-                        <h2>Clinical Interview Simulation</h2>
-                        <p>
-                            You are about to interview <strong>James</strong>, a 21-year-old
-                            university student visiting the psychiatric outpatient clinic for
-                            the first time.
-                        </p>
-                        <div className="scenario-card">
-                            <div className="scenario-header">📋 Scenario Briefing</div>
-                            <ul style={{textAlign: 'left', marginTop: '10px', fontSize: '0.9rem', color: 'var(--text-secondary)'}}>
-                                <li>Patient was brought by his girlfriend</li>
-                                <li>First psychiatric visit — likely reluctant</li>
-                                <li>Your goal: build rapport, take history, assess risk, form diagnosis</li>
-                            </ul>
+        <section className="chat-panel" style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', flex: 1 }}>
+            <div className="chat-messages" style={{ flex: 1, overflowY: 'auto' }}>
+                
+                {/* Show the briefing only if no one has spoken yet (ignores the 'Session started' system message) */}
+                {messages.filter(msg => msg.role !== 'system').length === 0 && (
+                    <div className="welcome-screen" style={{ flex: 'none', padding: '10px 0 30px 0', borderBottom: '1px solid var(--border)', marginBottom: '20px' }}>
+                        <div className="welcome-content" style={{ marginTop: 0, margin: '0 auto' }}>
+                            <div className="welcome-icon" style={{ fontSize: '48px' }}>🩺</div>
+                            <h2>Clinical Interview Simulation</h2>
+                            <p>
+                                You are about to interview <strong>James</strong>, a 21-year-old
+                                university student visiting the psychiatric outpatient clinic for
+                                the first time.
+                            </p>
+                            <div className="scenario-card">
+                                <div className="scenario-header">📋 Scenario Briefing</div>
+                                <ul style={{textAlign: 'left', marginTop: '10px', fontSize: '0.9rem', color: 'var(--text-secondary)'}}>
+                                    <li>Patient was brought by his girlfriend</li>
+                                    <li>First psychiatric visit — likely reluctant</li>
+                                    <li>Your goal: build rapport, take history, assess risk, form diagnosis</li>
+                                </ul>
+                            </div>
                         </div>
                     </div>
-                </div>
-            )}
-
-            <div className="chat-messages">
+                )}
                 {messages.map((msg, idx) => (
-                    <div key={idx} className={`message ${msg.role === 'student' ? 'user-message' : 'system-message'}`}>
-                        {msg.role === 'system' && <div className="avatar">⚙️</div>}
-                        {msg.role === 'patient' && <div className="avatar">🧑</div>}
-                        <div className="bubble">
-                            {/* React completely neutralizes XSS here by safely evaluating msg.content */}
-                            {msg.content.split('\n').map((line: string, i: number) => (
-                                <span key={i}>
-                                    {line}
-                                    <br />
-                                </span>
-                            ))}
+                    <div key={idx} className={`message ${msg.role}`}>
+                        {msg.role === 'system' && <div className="message-avatar">⚙️</div>}
+                        {msg.role === 'patient' && <div className="message-avatar">🧑</div>}
+                        {msg.role === 'student' && <div className="message-avatar">🩺</div>}
+                        
+                        <div className="message-bubble">
+                            {msg.content.split('\n').map((line: string, i: number) => {
+                                // Split the line by markdown bold (**text**) or italic (*text*)
+                                const parts = line.split(/(\*\*.*?\*\*|\*.*?\*)/g);
+                                return (
+                                    <span key={i}>
+                                        {parts.map((part, j) => {
+                                            if (part.startsWith('**') && part.endsWith('**')) {
+                                                return <strong key={j}>{part.slice(2, -2)}</strong>;
+                                            }
+                                            if (part.startsWith('*') && part.endsWith('*')) {
+                                                return <em key={j} style={{ color: 'var(--text-secondary)' }}>{part.slice(1, -1)}</em>;
+                                            }
+                                            return <span key={j}>{part}</span>;
+                                        })}
+                                        <br />
+                                    </span>
+                                );
+                            })}
                         </div>
                     </div>
                 ))}
                 
                 {currentStreamText && (
-                    <div className="message system-message">
-                        <div className="avatar">🧑</div>
-                        <div className="bubble">
-                            {currentStreamText.split('\n').map((line: string, i: number) => (
-                                <span key={i}>
-                                    {line}
-                                    <br />
-                                </span>
-                            ))}
+                    <div className="message patient">
+                        <div className="message-avatar">🧑</div>
+                        <div className="message-bubble">
+                            {currentStreamText.split('\n').map((line: string, i: number) => {
+                                const parts = line.split(/(\*\*.*?\*\*|\*.*?\*)/g);
+                                return (
+                                    <span key={i}>
+                                        {parts.map((part, j) => {
+                                            if (part.startsWith('**') && part.endsWith('**')) {
+                                                return <strong key={j}>{part.slice(2, -2)}</strong>;
+                                            }
+                                            if (part.startsWith('*') && part.endsWith('*')) {
+                                                return <em key={j} style={{ color: 'var(--text-secondary)' }}>{part.slice(1, -1)}</em>;
+                                            }
+                                            return <span key={j}>{part}</span>;
+                                        })}
+                                        <br />
+                                    </span>
+                                );
+                            })}
                         </div>
                     </div>
                 )}
@@ -124,7 +149,7 @@ export function ChatPanel() {
                 <div ref={messagesEndRef} />
             </div>
 
-            <div className="input-bar">
+            <div className="input-bar" style={{ flexShrink: 0 }}>
                 <textarea 
                     ref={textareaRef}
                     placeholder={isWaiting ? "Wait for patient response..." : "Type your response to James..."}

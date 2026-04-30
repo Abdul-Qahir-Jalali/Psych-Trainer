@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 
-import { SquarePen, Search, LogOut, Settings, PanelLeftClose } from 'lucide-react';
+import { SquarePen, Search, LogOut, Settings, PanelLeftClose, MessageSquare } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import { supabase } from '../lib/supabase';
 
@@ -127,8 +127,12 @@ export function Sidebar() {
                             key={s.session_id} 
                             className={`session-item ${s.session_id === currentSessionId ? 'active' : ''}`}
                             onClick={() => onSelectSession(s.session_id)}
+                            title={s.title || `Session: ${s.session_id}`}
                         >
-                            {s.title || `Session: ${s.session_id}`}
+                            <MessageSquare size={16} style={{ flexShrink: 0, opacity: 0.7 }} />
+                            <span className="session-item-text">
+                                {s.title || `Session: ${s.session_id}`}
+                            </span>
                         </div>
                     ))
                 ) : (

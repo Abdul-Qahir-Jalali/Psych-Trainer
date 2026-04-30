@@ -81,7 +81,7 @@ function App() {
     }
 
     return (
-        <div className={`app-container ${mobileTab === 'eval' ? 'show-eval-mobile' : ''}`}>
+        <div className={`app-container ${mobileTab === 'eval' ? 'show-eval-mobile' : ''}`} style={{ height: '100vh', width: '100vw', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
             <header id="app-header">
                 <div className="header-left">
                     <button 
@@ -107,7 +107,7 @@ function App() {
                 </div>
             </header>
 
-            <main id="app-main">
+            <main id="app-main" style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
                 <div className={`sidebar-wrapper ${isSidebarOpen ? 'open' : 'closed'}`}>
                     <Sidebar />
                 </div>

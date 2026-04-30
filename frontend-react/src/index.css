@@ -283,17 +283,26 @@ body {
 }
 
 .session-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   padding: 10px 12px;
   border-radius: var(--radius-sm);
   font-size: 0.9rem;
   color: var(--text-secondary);
   cursor: pointer;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
   transition: background var(--transition-fast), color var(--transition-fast);
   -webkit-user-select: none;
   user-select: none;
+  width: 100%;
+}
+
+.session-item-text {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0; /* This is the magic rule that forces flexbox to use the ellipsis! */
 }
 
 .session-item:hover {
@@ -302,8 +311,9 @@ body {
 }
 
 .session-item.active {
-  background: var(--accent);
-  color: white;
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  font-weight: 600;
 }
 
 /* ═══════════════════════════════════════════════════════

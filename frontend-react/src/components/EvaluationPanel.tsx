@@ -67,7 +67,26 @@ export function EvaluationPanel() {
                                 <div className="note-badge note-neutral">
                                     {note.includes("Warning") || note.includes("Lost") ? "⚠️ Warning" : "👁️ Observation"}
                                 </div>
-                                <div className="note-text">{note}</div>
+                                <div className="note-text">
+                                    {note.split('\n').map((line: string, i: number) => {
+                                        // Split the string by bold (**) or italic (*) tags
+                                        const parts = line.split(/(\*\*.*?\*\*|\*.*?\*)/g);
+                                        return (
+                                            <span key={i}>
+                                                {parts.map((part, j) => {
+                                                    if (part.startsWith('**') && part.endsWith('**')) {
+                                                        return <strong key={j}>{part.slice(2, -2)}</strong>;
+                                                    }
+                                                    if (part.startsWith('*') && part.endsWith('*')) {
+                                                        return <em key={j} style={{ color: 'var(--text-secondary)' }}>{part.slice(1, -1)}</em>;
+                                                    }
+                                                    return <span key={j}>{part}</span>;
+                                                })}
+                                                <br />
+                                            </span>
+                                        );
+                                    })}
+                                </div>
                             </div>
                         ))}
                         {notes.length === 0 && (
