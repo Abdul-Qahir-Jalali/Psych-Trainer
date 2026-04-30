@@ -33,7 +33,11 @@ class RouterDecision(BaseModel):
 async def _router_node(state: SimulationState) -> dict:
     """Decides the next phase based on conversation history (asynchronously)."""
     messages = state["messages"]
-    current_phase = Phase(state["phase"]) if isinstance(state["phase"], str) else state["phase"]
+    try:
+        current_phase = Phase(state["phase"]) if isinstance(state["phase"], str) else state["phase"]
+    except ValueError:
+        # Gracefully handle the hallucinated phase by defaulting to the patient
+        return "patient"
     turn_count = state["turn_count"]
 
     # Hard limits
