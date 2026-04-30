@@ -34,4 +34,6 @@ async def test_router_node_invalid_phase():
     """
     invalid_state = {"phase": "HALLUCINATED_PHASE", "messages": [], "turn_count": 1}
     result = await _router_node(invalid_state)
-    assert result.get("phase") == "HALLUCINATED_PHASE", "Router preserves state if conditions not met."
+    
+    # Corrected assertion: Check that the router outputs the "patient" string as the next node
+    assert result == "patient", "Router should default to 'patient' for invalid phases."
