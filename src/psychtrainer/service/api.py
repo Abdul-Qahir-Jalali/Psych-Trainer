@@ -426,6 +426,27 @@ async def end_session(request: Request, payload: GradeRequest, user_id: str = De
     )
 
 
+@app.delete("/api/session/{session_id}")
+async def delete_session(session_id: str, user_id: str = Depends(get_current_user)):
+    """Deletes a session from Supabase UI and LangGraph checkpoints."""
+    if not session_id.startswith(f"{user_id}_"):
+        raise HTTPException(status_code=403, detail="Unauthorized access to session")
+        
+    try:
+        # 1. Delete from Supabase (removes it from the sidebar)
+        from psychtrainer.workflow.prompt_registry import supabase
+        supabase.table("sessions").delete().eq("id", session_id).execute()
+        
+        # 2. Delete from Postgres LangGraph tables
+        # Since we stored the retriever in app.state, we can use it to access the pool
+        if hasattr(app.state, "retriever") and hasattr(app.state.retriever, "delete_thread"):
+            await app.state.retriever.delete_thread(session_id)
+            
+        return {"status": "success", "message": "Session deleted"}
+    except Exception as e:
+        logger.error(f"Failed to delete session: {e}")
+        raise HTTPException(status_code=500, detail="Failed to delete session")
+
 import os
 
 # Mount Static

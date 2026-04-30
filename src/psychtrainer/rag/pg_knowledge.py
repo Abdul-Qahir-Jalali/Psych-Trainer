@@ -105,6 +105,20 @@ class PGRetriever:
         """Find relevant medical facts (MedQA)."""
         return await self.search(query, "medical_knowledge", limit=2)
 
+    async def delete_thread(self, thread_id: str):
+        """Deletes all LangGraph checkpoints for a specific thread."""
+        await self._ensure_pool()
+        try:
+            async with self.pool.connection() as conn:
+                async with conn.cursor() as cur:
+                    await cur.execute("DELETE FROM checkpoints WHERE thread_id = %s", (thread_id,))
+                    await cur.execute("DELETE FROM checkpoint_blobs WHERE thread_id = %s", (thread_id,))
+                    await cur.execute("DELETE FROM checkpoint_writes WHERE thread_id = %s", (thread_id,))
+                    logger.info("thread_deleted", thread_id=thread_id)
+        except Exception as e:
+            logger.error("thread_deletion_failed", error=str(e), thread_id=thread_id)
+            raise e
+            
     async def close(self):
         if self._pool_ready:
             await self.pool.close()

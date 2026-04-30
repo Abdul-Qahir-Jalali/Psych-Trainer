@@ -139,7 +139,8 @@ function App() {
                                         boxShadow: selectedPatientId === patient.id ? '0 8px 24px rgba(0,149,255,0.12)' : '0 2px 8px rgba(0,0,0,0.03)'
                                     }} onClick={() => setSelectedPatientId(selectedPatientId === patient.id ? null : patient.id)}>
                                         
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                        {/* 1. Top Header Area */}
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                                             <div>
                                                 <h3 style={{ margin: '0 0 6px 0', fontSize: '20px', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
                                                     {patient.name} <span style={{ fontSize: '14px', fontWeight: 'normal', color: 'var(--text-muted)' }}>• {patient.age} yrs</span>
@@ -147,30 +148,31 @@ function App() {
                                                 <div style={{ color: 'var(--accent-primary)', fontWeight: 600, fontSize: '15px' }}>{patient.headline}</div>
                                             </div>
                                             
-                                            {selectedPatientId !== patient.id ? (
-                                                <span style={{ color: 'var(--text-muted)', fontSize: '14px', fontWeight: 500 }}>Click to view details ↓</span>
-                                            ) : (
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
-                                                    <span 
-                                                        style={{ color: 'var(--text-muted)', fontSize: '14px', fontWeight: 500, cursor: 'pointer' }} 
-                                                        onClick={(e) => { e.stopPropagation(); setSelectedPatientId(null); }}
-                                                    >
-                                                        Hide details ↑
-                                                    </span>
-                                                    <button className="btn-primary" onClick={(e) => { e.stopPropagation(); handleStartSession(); }} disabled={isWaiting} style={{ padding: '10px 20px', fontSize: '15px' }}>
-                                                        {isWaiting ? 'Starting...' : '▶ Begin Session'}
-                                                    </button>
-                                                </div>
-                                            )}
-
+                                            <span style={{ color: 'var(--text-muted)', fontSize: '14px', fontWeight: 500, whiteSpace: 'nowrap', marginLeft: '12px' }}>
+                                                {selectedPatientId === patient.id ? 'Hide details ↑' : 'Click to view details ↓'}
+                                            </span>
                                         </div>
                                         
+                                        {/* 2. Expandable Description */}
                                         {selectedPatientId === patient.id && (
                                             <div style={{ marginTop: '20px', paddingTop: '16px', borderTop: '1px solid var(--border)', color: 'var(--text-secondary)', lineHeight: '1.6', fontSize: '15px' }}>
                                                 <strong style={{ color: 'var(--text-primary)' }}>Clinical Background:</strong><br/>
                                                 <span style={{ display: 'inline-block', marginTop: '6px' }}>{patient.description}</span>
                                             </div>
                                         )}
+                                        
+                                        {/* 3. Always-Visible Action Button at the Bottom */}
+                                        <div style={{ marginTop: '24px', display: 'flex', justifyContent: 'center' }}>
+                                            <button 
+                                                className="btn-primary" 
+                                                onClick={(e) => { e.stopPropagation(); handleStartSession(); }} 
+                                                disabled={isWaiting} 
+                                                style={{ width: '100%', padding: '12px', fontSize: '16px', justifyContent: 'center' }}
+                                            >
+                                                {isWaiting ? 'Starting...' : '▶ Begin Session'}
+                                            </button>
+                                        </div>
+                                        
                                     </div>
                                 ))}
                             </div>
