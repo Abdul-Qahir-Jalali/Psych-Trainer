@@ -47,6 +47,10 @@ interface StoreState {
     handleSendMessage: (text: string) => Promise<void>;
     handleEndSession: () => Promise<void>;
     handleLogout: () => Promise<void>;
+    
+    // ADD THIS EXACT LINE HERE:
+    handleDeleteSession: (id: string) => Promise<void>;
+
 }
 
 export const useStore = create<StoreState>((set, get) => ({
@@ -295,6 +299,36 @@ export const useStore = create<StoreState>((set, get) => ({
             set({ isWaiting: false });
         }
     },
+
+
+    // PASTE THIS NEW FUNCTION RIGHT ABOVE handleLogout
+    handleDeleteSession: async (id: string) => {
+        const { sessionToken, currentSessionId, loadSessionsList, handleNewSession } = get();
+
+        try {
+            const res = await fetch(`${API_BASE}/session/${id}`, {
+                method: 'DELETE',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    ...(sessionToken ? { 'Authorization': `Bearer ${sessionToken}` } : {})
+                }
+            });
+            
+            if (!res.ok) throw new Error('Failed to delete session');
+
+            // If the user deletes the chat they are currently looking at, clear the screen
+            if (currentSessionId === id) {
+                handleNewSession();
+            }
+
+            // Refresh the sidebar list
+            await loadSessionsList();
+        } catch (err: any) {
+            console.error(err);
+            alert('Failed to delete chat.');
+        }
+    },
+
 
     handleLogout: async () => {
         await supabase.auth.signOut();

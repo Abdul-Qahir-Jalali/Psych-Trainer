@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 
-import { SquarePen, Search, LogOut, Settings, PanelLeftClose, MessageSquare } from 'lucide-react';
+import { SquarePen, Search, LogOut, Settings, PanelLeftClose, MessageSquare, MoreVertical, Trash2 } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import { supabase } from '../lib/supabase';
 
@@ -12,6 +12,9 @@ export function Sidebar() {
     const handleLogout = useStore(state => state.handleLogout);
     const setIsSidebarOpen = useStore(state => state.setIsSidebarOpen);
     const isSidebarOpen = useStore(state => state.isSidebarOpen);
+    // PASTE THESE TWO LINES:
+    const handleDeleteSession = useStore(state => state.handleDeleteSession);
+    const [openMenuId, setOpenMenuId] = useState<string | null>(null);
     const [userEmail, setUserEmail] = useState<string>('User');
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     // Ref to track our profile section
@@ -128,11 +131,63 @@ export function Sidebar() {
                             className={`session-item ${s.session_id === currentSessionId ? 'active' : ''}`}
                             onClick={() => onSelectSession(s.session_id)}
                             title={s.title || `Session: ${s.session_id}`}
+                            style={{ position: 'relative' }} 
+                            onMouseLeave={() => setOpenMenuId(null)} 
                         >
                             <MessageSquare size={16} style={{ flexShrink: 0, opacity: 0.7 }} />
+                            
                             <span className="session-item-text">
                                 {s.title || `Session: ${s.session_id}`}
                             </span>
+
+                            {/* Three Dots Button */}
+                            <button 
+                                onClick={(e) => {
+                                    e.stopPropagation(); // Prevents the chat from opening when clicking the dots
+                                    setOpenMenuId(openMenuId === s.session_id ? null : s.session_id);
+                                }}
+                                style={{ 
+                                    background: 'transparent', border: 'none', color: 'inherit', 
+                                    cursor: 'pointer', padding: '2px', display: 'flex', alignItems: 'center' 
+                                }}
+                            >
+                                <MoreVertical size={16} style={{ opacity: 0.6 }} />
+                            </button>
+
+                            {/* Dropdown Menu */}
+                            {openMenuId === s.session_id && (
+                                <div style={{
+                                    position: 'absolute',
+                                    right: '8px',
+                                    top: '36px',
+                                    backgroundColor: 'var(--bg-card)',
+                                    border: '1px solid var(--border)',
+                                    borderRadius: 'var(--radius-sm)',
+                                    padding: '4px',
+                                    boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                                    zIndex: 50,
+                                    width: '120px'
+                                }}>
+                                    <button 
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            setOpenMenuId(null);
+                                            handleDeleteSession(s.session_id);
+                                        }}
+                                        style={{ 
+                                            display: 'flex', alignItems: 'center', gap: '8px', 
+                                            background: 'transparent', border: 'none', color: '#ef4444', 
+                                            cursor: 'pointer', padding: '8px 12px', fontSize: '13px', width: '100%',
+                                            borderRadius: '4px', transition: 'background 0.2s'
+                                        }}
+                                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.1)'}
+                                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                                    >
+                                        <Trash2 size={14} />
+                                        Delete
+                                    </button>
+                                </div>
+                            )}
                         </div>
                     ))
                 ) : (

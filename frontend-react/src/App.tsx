@@ -112,7 +112,7 @@ function App() {
                     <Sidebar />
                 </div>
 
-                <div className="mobile-tabs" style={{ display: window.innerWidth < 768 ? 'flex' : 'none' }}>
+                <div className="mobile-tabs">
                     <button className={`mobile-tab ${mobileTab === 'chat' ? 'active' : ''}`} onClick={() => setMobileTab('chat')}>💬 Chat</button>
                     <button className={`mobile-tab ${mobileTab === 'eval' ? 'active' : ''}`} onClick={() => setMobileTab('eval')}>📊 Evaluation</button>
                 </div>
