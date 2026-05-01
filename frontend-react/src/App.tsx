@@ -81,7 +81,7 @@ function App() {
     }
 
     return (
-        <div className={`app-container ${mobileTab === 'eval' ? 'show-eval-mobile' : ''}`} style={{ height: '100vh', width: '100vw', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+        <div className={`app-container ${mobileTab === 'eval' ? 'show-eval-mobile' : ''}`} style={{ height: '100dvh', width: '100vw', overflow: 'hidden', display: 'flex', flexDirection: 'column', paddingTop: 'env(safe-area-inset-top, 0px)' }}>
             <header id="app-header">
                 <div className="header-left">
                     <button 
@@ -89,9 +89,11 @@ function App() {
                         onClick={() => setIsSidebarOpen(!isSidebarOpen)}
                         title="Toggle Sidebar"
                     >
+                        {/* Standard 3-line Hamburger Menu SVG */}
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <line x1="4" y1="8" x2="20" y2="8"></line>
-                            <line x1="4" y1="16" x2="14" y2="16"></line>
+                            <line x1="4" y1="6" x2="20" y2="6"></line>
+                            <line x1="4" y1="12" x2="20" y2="12"></line>
+                            <line x1="4" y1="18" x2="20" y2="18"></line>
                         </svg>
                     </button>
                     <div>
@@ -107,7 +109,13 @@ function App() {
                 </div>
             </header>
 
-            <main id="app-main" style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+            <main id="app-main" style={{ display: 'flex', flex: 1, overflow: 'hidden', position: 'relative' }}>
+                
+                {/* 1. Clickable Background Overlay */}
+                {isSidebarOpen && (
+                    <div className="sidebar-overlay" onClick={() => setIsSidebarOpen(false)} />
+                )}
+
                 <div className={`sidebar-wrapper ${isSidebarOpen ? 'open' : 'closed'}`}>
                     <Sidebar />
                 </div>

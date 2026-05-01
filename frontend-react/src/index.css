@@ -955,6 +955,11 @@ body {
 .mobile-tabs {
   display: none;
 }
+
+/* Hide the overlay on desktop */
+.sidebar-overlay {
+  display: none;
+}
 /* ═══════════════════════════════════════════════════════
    RESPONSIVE
    ═══════════════════════════════════════════════════════ */
@@ -972,6 +977,27 @@ body {
     height: 100%;
     z-index: 1000;
     transition: transform var(--transition-smooth);
+  }
+
+  /* ── Mobile Sidebar (ChatGPT Style Drawer) ── */
+  
+  /* PASTE THIS NEW OVERLAY BLOCK */
+  .sidebar-overlay {
+    display: block;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.4);
+    z-index: 999; /* Sits right below the sidebar (which is 1000) */
+    cursor: pointer;
+    animation: fadeIn 0.2s ease-out;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
   }
   
   .sidebar-wrapper.closed {
@@ -1040,8 +1066,10 @@ body {
   }
 
   /* ── Header & Input Adjustments ── */
+  /* ── Header & Input Adjustments ── */
   #app-header {
     padding: 12px 16px;
+    margin-top: 8px; /* Safely pushes the header down into view */
   }
 
   .header-left h1 {
